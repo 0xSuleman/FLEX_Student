@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f3f6;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #a0aec0;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #718096;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #a0aec0 #f1f3f6;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Card header style matching FLEX portal */
+.card-header {
+  @apply bg-primary text-white px-4 py-2 text-sm font-semibold rounded-t;
+}
+
+.card-body {
+  @apply bg-white p-4 rounded-b shadow;
+}
+
+/* Table alternating rows */
+.table-striped tbody tr:nth-child(even) {
+  @apply bg-gray-50;
+}
+
+.table-striped tbody tr:nth-child(odd) {
+  @apply bg-white;
+}
