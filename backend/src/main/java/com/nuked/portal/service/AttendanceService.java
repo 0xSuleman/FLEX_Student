@@ -47,7 +47,7 @@ public class AttendanceService {
             dto.setPresent(present);
             dto.setAbsent(absent);
             dto.setLeaves(leaves);
-            dto.setPercentage(records.isEmpty() ? 0.0 : (present * 100.0) / records.size());
+            dto.setPercentage(records.isEmpty() ? 0 : Math.round(present * 100.0 / records.size()));
 
             List<AttendanceDTO.AttendanceRecordDTO> recordDTOs = records.stream().map(r -> {
                 AttendanceDTO.AttendanceRecordDTO recordDTO = new AttendanceDTO.AttendanceRecordDTO();

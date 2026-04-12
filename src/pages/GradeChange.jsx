@@ -41,6 +41,16 @@ export default function GradeChange() {
       setLoading(true)
       setSelected([])
       try {
+        // Grade change is only allowed within 2 weeks of grade publication
+        // Approximate publication dates by semester end + 2 weeks
+        const gradeDeadlines = {
+          'Fall 2024': new Date('2025-02-01'),
+          'Spring 2025': new Date('2025-07-01'),
+          'Fall 2025': new Date('2026-02-01'),
+        }
+        const deadline = gradeDeadlines[semester]
+        const withinWindow = deadline ? new Date() <= deadline : false
+
         const res = await api.get('/grade-report')
         const arr = Array.isArray(res.data) ? res.data : []
         const match = arr.find(s => s.semester === semester)
@@ -50,7 +60,7 @@ export default function GradeChange() {
             name: c.courseName,
             grade: c.theoryGrade,
             labGrade: c.labGrade,
-            eligible: true,
+            eligible: withinWindow,
           })))
         } else {
           setCourses(MOCK_DATA[semester] || [])
@@ -96,6 +106,7 @@ export default function GradeChange() {
             <p className="text-xs text-cocoa font-medium">
               Appeals can only be submitted within <strong>two weeks</strong> after the grade is published.
               Only courses with potential calculation errors are eligible.
+              If the window has expired, all courses will show as <strong>Not Eligible</strong>.
             </p>
           </div>
         </div>
@@ -170,7 +181,9 @@ export default function GradeChange() {
         )}
       </div>
 
-      <button onClick={handleSubmit} className="btn-primary cascade-in" style={{ animationDelay: '0.2s' }}>Submit Appeal</button>
+      {courses.some(c => c.eligible) && (
+        <button onClick={handleSubmit} className="btn-primary cascade-in" style={{ animationDelay: '0.2s' }}>Submit Appeal</button>
+      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Star, X, MessageSquare, CheckCircle2 } from 'lucide-react'
+import { Star, X, MessageSquare, CheckCircle2, AlertTriangle } from 'lucide-react'
 import api from '../services/api'
 
 const INITIAL_COURSES = [
@@ -32,18 +32,41 @@ export default function CourseFeedback() {
   useEffect(() => {
     const fetchFeedback = async () => {
       try {
-        const res = await api.get('/feedback')
-        const data = res.data.map(item => ({
-          id: item.id,
-          code: item.courseCode,
-          name: item.courseName,
-          cr: item.creditHours,
-          status: item.status,
-          submittedDate: item.submittedDate,
-          rating: item.rating,
-          comments: item.comments,
-        }))
-        setCourses(data)
+        // Fetch both feedback and current enrollments
+        const [fbRes, enrollRes] = await Promise.all([
+          api.get('/feedback'),
+          api.get('/enrollments?semester=Spring+2026'),
+        ])
+        const allFeedback = Array.isArray(fbRes.data) ? fbRes.data : []
+        const enrollments = Array.isArray(enrollRes.data) ? enrollRes.data : []
+
+        // Only show feedback for currently enrolled courses
+        const enrolledCodes = new Set(enrollments.map(e => e.courseCode))
+        const filtered = allFeedback
+          .filter(item => enrolledCodes.has(item.courseCode))
+          .map(item => ({
+            id: item.id,
+            code: item.courseCode,
+            name: item.courseName,
+            cr: item.creditHours,
+            status: item.status,
+            submittedDate: item.submittedDate,
+            rating: item.rating,
+            comments: item.comments,
+          }))
+
+        // If no matching feedback found, show enrolled courses as PENDING
+        if (filtered.length > 0) {
+          setCourses(filtered)
+        } else {
+          setCourses(enrollments.map((e, i) => ({
+            id: i + 1,
+            code: e.courseCode,
+            name: e.courseName,
+            cr: e.creditHours,
+            status: 'PENDING',
+          })))
+        }
       } catch {
         setCourses(INITIAL_COURSES)
       } finally {
@@ -82,6 +105,12 @@ export default function CourseFeedback() {
 
   const pending = courses.filter(c => c.status === 'PENDING').length
 
+  // Check if feedback period is open
+  const now = new Date()
+  const fb1Start = new Date('2026-02-16'), fb1End = new Date('2026-02-20T23:59:59')
+  const fb2Start = new Date('2026-05-04'), fb2End = new Date('2026-05-08T23:59:59')
+  const feedbackOpen = (now >= fb1Start && now <= fb1End) || (now >= fb2Start && now <= fb2End)
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -98,7 +127,21 @@ export default function CourseFeedback() {
         <p className="text-sm text-cocoa mt-2">{pending > 0 ? `${pending} feedback${pending > 1 ? 's' : ''} pending. Submit early.` : 'All feedback submitted. Thank you!'}</p>
       </div>
 
-      <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.05s' }}>
+      {!feedbackOpen && (
+        <div className="chunky-card p-5 bg-mustard/20 cascade-in" style={{ animationDelay: '0.05s' }}>
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={20} className="text-rust shrink-0 mt-0.5" strokeWidth={2.5} />
+            <div>
+              <h3 className="font-display text-[10px] text-ink uppercase mb-2">Feedback Period Closed</h3>
+              <p className="text-xs text-cocoa font-medium">
+                The feedback window is currently closed. Next feedback period: <strong>May 4 – May 8, 2026</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.1s' }}>
         <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
           <h3 className="heading-retro text-sm">Spring 2026 Courses</h3>
           <MessageSquare size={14} className="text-ink" />
@@ -110,7 +153,7 @@ export default function CourseFeedback() {
               <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Course</th>
               <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest">CrHrs</th>
               <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest">Status</th>
-              <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest">Action</th>
+              {feedbackOpen && <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest">Action</th>}
             </tr>
           </thead>
           <tbody>
@@ -122,17 +165,23 @@ export default function CourseFeedback() {
                   <td className="px-5 py-3 text-ink">{c.name}</td>
                   <td className="px-5 py-3 text-center"><span className="tag bg-bone text-ink">{c.cr}</span></td>
                   <td className="px-5 py-3 text-center">
-                    <span className={`tag ${isPending ? 'bg-cocoa text-bone' : 'bg-moss text-cream'}`}>{c.status}</span>
+                    <span className={`tag ${
+                      isPending
+                        ? (feedbackOpen ? 'bg-cocoa text-bone' : 'bg-bad text-bone')
+                        : 'bg-moss text-cream'
+                    }`}>{isPending && !feedbackOpen ? 'NOT SUBMITTED' : c.status}</span>
                   </td>
-                  <td className="px-5 py-3 text-center">
-                    {isPending ? (
-                      <button onClick={() => open(c)} className="bg-coffee text-bone border-2 border-ink rounded px-3 py-1 font-extrabold text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">
-                        Give Feedback
-                      </button>
-                    ) : (
-                      <span className="text-cocoa/40 text-[10px] font-bold uppercase tracking-wider">✓ Done</span>
-                    )}
-                  </td>
+                  {feedbackOpen && (
+                    <td className="px-5 py-3 text-center">
+                      {isPending ? (
+                        <button onClick={() => open(c)} className="bg-coffee text-bone border-2 border-ink rounded px-3 py-1 font-extrabold text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">
+                          Give Feedback
+                        </button>
+                      ) : (
+                        <span className="text-cocoa/40 text-[10px] font-bold uppercase tracking-wider">Done</span>
+                      )}
+                    </td>
+                  )}
                 </tr>
               )
             })}

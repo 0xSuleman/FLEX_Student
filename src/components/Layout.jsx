@@ -52,8 +52,8 @@ export default function Layout() {
   const STUDENT = {
     name: user?.name || 'Student',
     rollNo: user?.rollNo || '—',
-    section: '—',
-    campus: '—',
+    section: user?.section || '—',
+    campus: user?.campus || '—',
   }
   const [search, setSearch] = useState('')
   const [showNotifs, setShowNotifs] = useState(false)
@@ -105,7 +105,7 @@ export default function Layout() {
           {/* profile */}
           <div className="px-4 py-5 border-b-2 border-ink text-center">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-coffee border-2 border-ink shadow-pixel rounded-md font-black text-3xl text-bone mb-3 avatar-glow">
-              SA
+              {STUDENT.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
             </div>
             <div className="font-extrabold text-sm uppercase tracking-wider text-bone leading-tight">
               {STUDENT.name}
@@ -188,7 +188,7 @@ export default function Layout() {
                 {showNotifs && (
                   <div className="absolute top-full right-0 mt-2 w-80 bg-cream border-2 border-ink rounded-lg shadow-pixel overflow-hidden z-50 cascade-in">
                     <div className="bg-cocoa text-bone px-4 py-2.5 border-b-2 border-ink flex items-center justify-between">
-                      <span className="font-display text-[9px] uppercase tracking-wider">// Notifications</span>
+                      <span className="font-display text-[9px] uppercase tracking-wider">Notifications</span>
                       {unreadCount > 0 && (
                         <button onClick={markAllRead} className="text-[9px] font-extrabold text-burn hover:text-bone uppercase tracking-wider">
                           Mark all read

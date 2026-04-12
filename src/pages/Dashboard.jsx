@@ -50,18 +50,18 @@ const CALENDAR_EVENTS = [
 ]
 
 const ENROLLED = [
-  { code: 'CS3001', name: 'Software Engineering',    section: 'BSE-243A', cr: 3, attendance: 92, latestGrade: 'A-' },
-  { code: 'CS3002', name: 'Database Systems',         section: 'BSE-243A', cr: 4, attendance: 88, latestGrade: 'B+' },
-  { code: 'CS3003', name: 'Operating Systems',        section: 'BSE-243B', cr: 3, attendance: 70, latestGrade: 'B'  },
-  { code: 'MT3005', name: 'Probability & Statistics', section: 'BSE-243A', cr: 3, attendance: 95, latestGrade: 'A'  },
-  { code: 'HS3006', name: 'Technical Writing',        section: 'BSE-243B', cr: 2, attendance: 84, latestGrade: 'B+' },
+  { code: 'CS3001', name: 'Software Engineering',    section: 'BSE-243A', cr: 3, attendance: 92, latestGrade: null },
+  { code: 'CS3002', name: 'Database Systems',         section: 'BSE-243A', cr: 4, attendance: 88, latestGrade: null },
+  { code: 'CS3003', name: 'Operating Systems',        section: 'BSE-243B', cr: 3, attendance: 70, latestGrade: null },
+  { code: 'MT3005', name: 'Probability & Statistics', section: 'BSE-243A', cr: 3, attendance: 95, latestGrade: null },
+  { code: 'HS3006', name: 'Technical Writing',        section: 'BSE-243B', cr: 2, attendance: 84, latestGrade: null },
 ]
 
 const RECENT_MARKS = [
   { course: 'CS3001', type: 'Quiz 3',      obtained: 4.8, total: 5,  avg: 3.5,  w: 5  },
-  { course: 'CS3002', type: 'Mid 1',       obtained: 22,  total: 25, avg: 19,   w: 10 },
+  { course: 'CS3002', type: 'Sessional 1', obtained: 22,  total: 25, avg: 19,   w: 10 },
   { course: 'CS3001', type: 'Assignment 2',obtained: 9.0, total: 10, avg: 8.0,  w: 5  },
-  { course: 'CS3003', type: 'Midterm',     obtained: 38,  total: 50, avg: 34,   w: 20 },
+  { course: 'CS3003', type: 'Sessional 1', obtained: 38,  total: 50, avg: 34,   w: 20 },
 ]
 
 const FEE = {
@@ -109,20 +109,112 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [dashData, setDashData] = useState(null)
+  const [enrolledCourses, setEnrolledCourses] = useState(ENROLLED)
+  const [recentMarks, setRecentMarks] = useState(RECENT_MARKS)
+  const [feeData, setFeeData] = useState(FEE)
+  const [transcriptStats, setTranscriptStats] = useState({ cgpa: 0, sgpa: 0, creditsEarned: 0, creditsAttempted: 0 })
+  const [pendingFeedback, setPendingFeedback] = useState(PENDING.feedback)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchDashboard = async () => {
+    const fetchAll = async () => {
       try {
-        const res = await api.get('/dashboard')
-        setDashData(res.data)
-      } catch {
-        setDashData(null)
-      } finally {
-        setLoading(false)
-      }
+        // Fetch all data in parallel
+        const [dashRes, enrollRes, attRes, marksRes, transcriptRes, feeRes, feedbackRes] = await Promise.allSettled([
+          api.get('/dashboard'),
+          api.get('/enrollments?semester=Spring+2026'),
+          api.get('/attendance?semester=Spring+2026'),
+          api.get('/marks?semester=Spring+2026'),
+          api.get('/transcript'),
+          api.get('/fees/challans'),
+          api.get('/feedback'),
+        ])
+
+        // Dashboard data
+        if (dashRes.status === 'fulfilled') setDashData(dashRes.value.data)
+
+        // Build enrolled courses with attendance
+        const enrollments = enrollRes.status === 'fulfilled' && Array.isArray(enrollRes.value.data) ? enrollRes.value.data : []
+        const attendanceData = attRes.status === 'fulfilled' && Array.isArray(attRes.value.data) ? attRes.value.data : []
+        const attMap = {}
+        attendanceData.forEach(a => { attMap[a.courseCode] = Math.round(a.percentage) })
+
+        if (enrollments.length > 0) {
+          setEnrolledCourses(enrollments.map(e => ({
+            code: e.courseCode,
+            name: e.courseName,
+            section: e.section,
+            cr: e.creditHours,
+            attendance: attMap[e.courseCode] ?? 0,
+            latestGrade: null,
+          })))
+        }
+
+        // Recent marks
+        if (marksRes.status === 'fulfilled' && Array.isArray(marksRes.value.data)) {
+          const allMarks = []
+          marksRes.value.data.forEach(course => {
+            (course.evaluations || []).forEach(ev => {
+              if (ev.obtained != null) {
+                allMarks.push({
+                  course: course.courseCode,
+                  type: ev.evaluationName,
+                  obtained: ev.obtained,
+                  total: ev.total,
+                  avg: ev.average,
+                  w: ev.weightage,
+                })
+              }
+            })
+          })
+          if (allMarks.length > 0) setRecentMarks(allMarks.slice(-4))
+        }
+
+        // Transcript stats (CGPA, SGPA, credits)
+        if (transcriptRes.status === 'fulfilled') {
+          const semesters = transcriptRes.value.data?.semesters || []
+          if (semesters.length > 0) {
+            // Sort chronologically to get the correct last semester
+            const semOrder = (name) => {
+              const [term, year] = name.split(' ')
+              return parseInt(year) * 10 + (term === 'Spring' ? 0 : term === 'Summer' ? 1 : 2)
+            }
+            const sorted = [...semesters].sort((a, b) => semOrder(a.semester) - semOrder(b.semester))
+            const last = sorted[sorted.length - 1]
+            const totalEarned = sorted.reduce((s, sem) => s + (sem.crEarned || 0), 0)
+            const totalAttempted = sorted.reduce((s, sem) => s + (sem.crAttempted || 0), 0)
+            setTranscriptStats({
+              cgpa: last.cgpa || 0,
+              sgpa: last.sgpa || 0,
+              creditsEarned: totalEarned,
+              creditsAttempted: totalAttempted,
+            })
+          }
+        }
+
+        // Fee challan (latest unpaid or most recent)
+        if (feeRes.status === 'fulfilled' && Array.isArray(feeRes.value.data) && feeRes.value.data.length > 0) {
+          const challans = feeRes.value.data
+          const unpaid = challans.find(c => (c.status || '').toUpperCase() === 'UNPAID')
+          const latest = unpaid || challans[0]
+          setFeeData({
+            challanNo: latest.challanNo || '—',
+            semester: latest.semester || '—',
+            amount: latest.amount || 0,
+            dueDate: latest.dueDate || '—',
+            status: latest.status || 'UNKNOWN',
+          })
+        }
+
+        // Pending feedback count
+        if (feedbackRes.status === 'fulfilled' && Array.isArray(feedbackRes.value.data)) {
+          const pending = feedbackRes.value.data.filter(f => (f.status || '').toUpperCase() === 'PENDING').length
+          setPendingFeedback(pending)
+        }
+      } catch { /* fallbacks already set */ }
+      finally { setLoading(false) }
     }
-    fetchDashboard()
+    fetchAll()
   }, [user])
 
   // Merge API data with fallbacks
@@ -135,10 +227,10 @@ export default function Dashboard() {
     section: personalInfo.section || STUDENT.section,
     campus: personalInfo.campus || STUDENT.campus,
     status: personalInfo.status || STUDENT.status,
-    cgpa: STUDENT.cgpa,
-    sgpa: STUDENT.sgpa,
-    creditsEarned: STUDENT.creditsEarned,
-    creditsAttempted: STUDENT.creditsAttempted,
+    cgpa: transcriptStats.cgpa,
+    sgpa: transcriptStats.sgpa,
+    creditsEarned: transcriptStats.creditsEarned,
+    creditsAttempted: transcriptStats.creditsAttempted,
   }
   const calendarEvents = (dashData?.academicCalendar || []).length > 0
     ? dashData.academicCalendar.map((e) => ({
@@ -160,7 +252,7 @@ export default function Dashboard() {
     mobile: personalInfo.mobileNo || personalInfo.mobile || PERSONAL.mobile,
   }
 
-  const aggAttendance = Math.round(ENROLLED.reduce((s, c) => s + c.attendance, 0) / ENROLLED.length)
+  const aggAttendance = enrolledCourses.length > 0 ? Math.round(enrolledCourses.reduce((s, c) => s + c.attendance, 0) / enrolledCourses.length) : 0
   const cgpaAnim = useCountUp(studentInfo.cgpa, 1500)
   const sgpaAnim = useCountUp(studentInfo.sgpa, 1500)
 
@@ -186,7 +278,7 @@ export default function Dashboard() {
               HELLO, {studentInfo.name.split(' ')[0].toUpperCase()}
             </h1>
             <p className="text-sm text-cocoa mt-2">
-              Spring 2026 · {ENROLLED.length} courses · Aggregate attendance {aggAttendance}%.
+              Spring 2026 · {enrolledCourses.length} courses · Aggregate attendance {aggAttendance}%.
             </p>
           </div>
           <DashboardCalendar />
@@ -195,7 +287,7 @@ export default function Dashboard() {
         {/* UNIVERSITY INFO */}
         <div className="chunky-card p-5 cascade-in" style={{ animationDelay: '0.03s' }}>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="heading-retro text-sm">// University Info</h3>
+            <h3 className="heading-retro text-sm">University Info</h3>
             <span className="tag bg-moss text-cream">{studentInfo.status}</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -213,30 +305,29 @@ export default function Dashboard() {
           <div className="col-span-12 sm:col-span-5 chunky-card chunky-card-hover p-5 relative overflow-hidden cascade-in" style={{ animationDelay: '0.1s' }}>
             <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-burn/10" />
             <div className="relative">
-              <div className="text-xs font-extrabold text-coffee uppercase tracking-widest">// CGPA</div>
+              <div className="text-xs font-extrabold text-coffee uppercase tracking-widest">CGPA</div>
               <div className="flex items-end gap-3 mt-2">
                 <div className="font-black text-6xl text-ink leading-none tabular-nums">{cgpaAnim.toFixed(2)}</div>
                 <div className="flex items-center gap-1 text-moss font-extrabold text-sm pb-2">
                   <TrendingUp size={14} strokeWidth={3} /> SGPA {sgpaAnim.toFixed(2)}
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2 mt-4">
+              <div className="grid grid-cols-2 gap-2 mt-4">
                 <MiniStat label="Cr. Earned" value={studentInfo.creditsEarned} />
                 <MiniStat label="Cr. Attempted" value={studentInfo.creditsAttempted} />
-                <MiniStat label="Rank" value="#12" />
               </div>
             </div>
           </div>
 
           <div className="col-span-6 sm:col-span-4 chunky-card chunky-card-hover p-5 cascade-in" style={{ animationDelay: '0.2s' }}>
-            <div className="text-xs font-extrabold text-coffee uppercase tracking-widest mb-3">// Attendance</div>
-            <div className="flex items-center gap-4">
+            <div className="text-xs font-extrabold text-coffee uppercase tracking-widest mb-2">Attendance</div>
+            <div className="flex items-center gap-3">
               <AttendanceBar pct={aggAttendance} />
-              <div className="flex-1 space-y-1">
-                {ENROLLED.slice(0, 4).map((c, idx) => (
-                  <div key={c.code} className="flex items-center gap-2">
-                    <span className="font-extrabold text-[11px] text-ink w-14">{c.code}</span>
-                    <div className="flex-1 h-1.5 bg-bone border border-ink rounded-sm overflow-hidden">
+              <div className={`flex-1 ${enrolledCourses.length > 5 ? 'space-y-0.5' : 'space-y-1'}`}>
+                {enrolledCourses.map((c, idx) => (
+                  <div key={c.code} className="flex items-center gap-1.5">
+                    <span className={`font-extrabold text-ink ${enrolledCourses.length > 6 ? 'text-[9px] w-12' : 'text-[11px] w-14'}`}>{c.code}</span>
+                    <div className={`flex-1 bg-bone border border-ink rounded-sm overflow-hidden ${enrolledCourses.length > 6 ? 'h-1' : 'h-1.5'}`}>
                       <div
                         className="h-full bar-fill"
                         style={{
@@ -246,7 +337,7 @@ export default function Dashboard() {
                         }}
                       />
                     </div>
-                    <span className="text-[10px] font-extrabold w-8 text-right" style={{ color: c.attendance >= 80 ? '#10B981' : '#DC2626' }}>
+                    <span className={`font-extrabold w-8 text-right ${enrolledCourses.length > 6 ? 'text-[8px]' : 'text-[10px]'}`} style={{ color: c.attendance >= 80 ? '#10B981' : '#DC2626' }}>
                       {c.attendance}%
                     </span>
                   </div>
@@ -258,13 +349,13 @@ export default function Dashboard() {
           <div className="col-span-6 sm:col-span-3 chunky-card chunky-card-hover p-5 relative overflow-hidden cascade-in" style={{ animationDelay: '0.3s' }}>
             <div className="absolute -bottom-10 -right-10 w-32 h-32 rounded-full bg-burn/10" />
             <div className="relative">
-              <div className="text-xs font-extrabold text-coffee uppercase tracking-widest">// Fee</div>
+              <div className="text-xs font-extrabold text-coffee uppercase tracking-widest">Fee</div>
               <div className="text-[10px] text-cocoa/70 uppercase font-bold mt-2">Next Challan</div>
-              <div className="font-black text-xl text-ink mt-0.5">Rs {(FEE.amount / 1000)}K</div>
-              <div className="text-[11px] font-bold text-coffee mt-1">{FEE.challanNo}</div>
-              <div className="text-[10px] text-cocoa mt-0.5">Due {FEE.dueDate}</div>
-              <span className={`tag mt-3 inline-block ${FEE.status === 'UNPAID' ? 'bg-cocoa text-bone' : 'bg-moss text-cream'}`}>
-                {FEE.status}
+              <div className="font-black text-xl text-ink mt-0.5">Rs {(feeData.amount / 1000).toFixed(0)}K</div>
+              <div className="text-[11px] font-bold text-coffee mt-1">{feeData.challanNo}</div>
+              <div className="text-[10px] text-cocoa mt-0.5">Due {feeData.dueDate}</div>
+              <span className={`tag mt-3 inline-block ${feeData.status === 'UNPAID' ? 'bg-cocoa text-bone' : 'bg-moss text-cream'}`}>
+                {feeData.status}
               </span>
             </div>
           </div>
@@ -272,11 +363,11 @@ export default function Dashboard() {
 
         {/* QUICK ACTIONS */}
         <div className="cascade-in" style={{ animationDelay: '0.04s' }}>
-          <h2 className="heading-retro text-2xl mb-4">// Quick Actions</h2>
+          <h2 className="heading-retro text-2xl mb-4">Quick Actions</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <QuickAction icon={BookOpen}       label="Register"   sub="Courses"           onClick={() => navigate('/course-registration')} />
             <QuickAction icon={Wallet}         label="Pay Fee"    sub="Challan"           onClick={() => navigate('/fee-challan')} />
-            <QuickAction icon={MessageSquare}  label="Feedback"   sub={`${PENDING.feedback} pending`} onClick={() => navigate('/feedback')} />
+            <QuickAction icon={MessageSquare}  label="Feedback"   sub={`${pendingFeedback} pending`} onClick={() => navigate('/feedback')} />
             <QuickAction icon={RotateCcw}      label="Retake"     sub="Request"           onClick={() => navigate('/retake-exam')} />
             <QuickAction icon={FileX}          label="Withdraw"   sub="Course"            onClick={() => navigate('/course-withdraw')} />
             <QuickAction icon={Download}       label="Transcript" sub="PDF"               onClick={() => navigate('/transcript')} />
@@ -286,8 +377,8 @@ export default function Dashboard() {
         {/* ENROLLED COURSES */}
         <div className="chunky-card overflow-hidden">
           <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
-            <h3 className="heading-retro text-sm">// Enrolled Courses — Spring 2026</h3>
-            <span className="text-xs font-bold text-ink uppercase tracking-wider">{ENROLLED.reduce((s, c) => s + c.cr, 0)} CR</span>
+            <h3 className="heading-retro text-sm">Enrolled Courses — Spring 2026</h3>
+            <span className="text-xs font-bold text-ink uppercase tracking-wider">{enrolledCourses.reduce((s, c) => s + c.cr, 0)} CR</span>
           </div>
           <table className="w-full text-sm">
             <thead>
@@ -301,7 +392,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {ENROLLED.map((c, i) => (
+              {enrolledCourses.map((c, i) => (
                 <tr key={c.code} className={`border-b border-dashed border-cocoa/30 ${i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'} hover:bg-tan/30 transition-colors`}>
                   <td className="px-5 py-3 font-extrabold text-ink">{c.code}</td>
                   <td className="px-5 py-3 text-ink">{c.name}</td>
@@ -310,7 +401,7 @@ export default function Dashboard() {
                   <td className="px-5 py-3 text-center">
                     <span className={`tag ${c.attendance >= 80 ? 'bg-moss text-cream' : 'bg-bad text-bone'}`}>{c.attendance}%</span>
                   </td>
-                  <td className="px-5 py-3 text-center"><span className={`tag ${gradeColor(c.latestGrade)}`}>{c.latestGrade}</span></td>
+                  <td className="px-5 py-3 text-center"><span className={`tag ${gradeColor(c.latestGrade)}`}>{c.latestGrade || '—'}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -320,7 +411,7 @@ export default function Dashboard() {
         {/* RECENT MARKS */}
         <div className="chunky-card overflow-hidden">
           <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
-            <h3 className="heading-retro text-sm">// Recent Evaluations</h3>
+            <h3 className="heading-retro text-sm">Recent Evaluations</h3>
             <span className="text-xs font-bold text-ink uppercase tracking-wider">Latest 4</span>
           </div>
           <table className="w-full text-sm">
@@ -335,7 +426,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {RECENT_MARKS.map((m, i) => {
+              {recentMarks.map((m, i) => {
                 const above = (m.obtained / m.total) >= (m.avg / m.total)
                 return (
                   <tr key={i} className={`border-b border-dashed border-cocoa/30 ${i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'}`}>
@@ -361,7 +452,7 @@ export default function Dashboard() {
         {/* ACADEMIC CALENDAR */}
         <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.1s' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b-2 border-ink bg-cocoa text-bone">
-            <span className="font-black text-xs uppercase tracking-widest">// Academic Calendar</span>
+            <span className="font-black text-xs uppercase tracking-widest">Academic Calendar</span>
             <Calendar size={14} />
           </div>
           <div className="p-4 space-y-2.5">
@@ -382,11 +473,12 @@ export default function Dashboard() {
         </div>
 
         {/* PERSONAL INFORMATION */}
-        <div className="chunky-card p-5 cascade-in" style={{ animationDelay: '0.18s' }}>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="heading-retro text-sm">// Personal Information</h3>
+        <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.18s' }}>
+          <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
+            <h3 className="heading-retro text-sm">Personal Information</h3>
+            <User size={14} className="text-ink" />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <InfoBox label="Name" value={personalDisplay.name} />
             <InfoBox label="Date of Birth" value={personalDisplay.dob} />
             <InfoBox label="Blood Group" value={personalDisplay.bloodGroup} />
@@ -399,15 +491,9 @@ export default function Dashboard() {
         </div>
 
         {/* CONTACT INFO */}
-        <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.12s' }}>
-          <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
-            <h3 className="heading-retro text-sm">Contact Information</h3>
-            <Cpu size={14} className="text-ink" />
-          </div>
-          <div className="p-5 space-y-5">
-            <ContactBlock label="Permanent" data={contactInfo} />
-            <ContactBlock label="Current"   data={contactInfo} />
-          </div>
+        <div className="space-y-4 cascade-in" style={{ animationDelay: '0.12s' }}>
+          <ContactBlock label="Permanent Address" data={contactInfo} />
+          <ContactBlock label="Current Address"   data={contactInfo} />
         </div>
 
         {/* FAMILY INFO */}
@@ -467,15 +553,15 @@ function InfoBox({ label, value }) {
 
 function ContactBlock({ label, data }) {
   return (
-    <div className="bg-cream border-2 border-ink rounded-md p-4 border-l-4 border-l-burn hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-pixel-sm transition-all">
-      <div className="flex items-center gap-2 mb-3 pb-2 border-b-2 border-dashed border-cocoa/20">
-        <span className="w-2.5 h-2.5 bg-burn rounded-sm" />
-        <h4 className="font-display text-[11px] text-ink uppercase tracking-widest">{label}</h4>
+    <div className="border-2 border-ink rounded-md overflow-hidden hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-pixel-sm transition-all">
+      <div className="bg-cocoa px-4 py-2 flex items-center gap-2">
+        <Cpu size={12} className="text-bone" />
+        <h4 className="font-display text-[10px] text-bone uppercase tracking-widest">{label}</h4>
       </div>
-      <div className="space-y-2.5 text-xs">
-        {Object.entries({ Address: data.address, 'Home Phone': data.phone, Postal: data.postal, City: data.city, Country: data.country }).map(([k, v]) => (
+      <div className="p-4 bg-cream space-y-2.5 text-xs">
+        {Object.entries({ Address: data.address, Phone: data.phone, Postal: data.postal, City: data.city, Country: data.country }).map(([k, v]) => (
           <div key={k} className="flex items-baseline gap-3">
-            <span className="text-[10px] font-extrabold text-coffee uppercase tracking-wider min-w-[72px]">{k}</span>
+            <span className="text-[10px] font-extrabold text-coffee uppercase tracking-wider min-w-[64px]">{k}</span>
             <span className="text-ink font-bold flex-1 truncate">{v || '—'}</span>
           </div>
         ))}

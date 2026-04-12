@@ -36,6 +36,16 @@ const SEMESTERS = [
       { code: 'HU3001', name: 'Professional Practices', cr: 3, grade: 'A-', points: 3.67, grading: 'absolute' },
     ],
   },
+  {
+    name: 'Spring 2026', crAttempted: 16, crEarned: 0, sgpa: 0, cgpa: 3.66,
+    courses: [
+      { code: 'CS4001', name: 'Artificial Intelligence', cr: 3, grade: 'I', points: 0 },
+      { code: 'CS4002', name: 'Compiler Construction', cr: 3, grade: 'I', points: 0 },
+      { code: 'CS4003', name: 'Computer Architecture', cr: 4, grade: 'I', points: 0 },
+      { code: 'CS4004', name: 'Theory of Automata', cr: 3, grade: 'I', points: 0 },
+      { code: 'CS4005', name: 'Information Security', cr: 3, grade: 'I', points: 0 },
+    ],
+  },
 ]
 
 const STUDENT = { name: 'Suleman Ahmed', rollNo: '24L-3072', degree: 'BS(SE)', campus: 'Lahore' }
@@ -71,6 +81,7 @@ function getMcaRow(mca) {
 
 const gradeColor = (g) => {
   if (!g) return 'bg-bone/40 text-cocoa/40'
+  if (g === 'I') return 'bg-coffee/50 text-bone'
   if (g.startsWith('A')) return 'bg-cocoa text-bone'
   if (g.startsWith('B')) return 'bg-mustard text-ink'
   if (g.startsWith('C')) return 'bg-tan text-ink'
@@ -85,11 +96,16 @@ export default function Transcript() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const semesterOrder = (name) => {
+      const [term, year] = name.split(' ')
+      return parseInt(year) * 10 + (term === 'Spring' ? 0 : term === 'Summer' ? 1 : 2)
+    }
+
     const fetchTranscript = async () => {
       try {
         const res = await api.get('/transcript')
         const d = res.data
-        setApiData({
+        const transcriptData = {
           student: {
             name: d.studentName,
             rollNo: d.rollNo,
@@ -110,7 +126,37 @@ export default function Transcript() {
               points: c.points,
             })),
           })),
-        })
+        }
+
+        // Sort completed semesters chronologically first
+        transcriptData.semesters.sort((a, b) => semesterOrder(a.name) - semesterOrder(b.name))
+
+        // Also fetch current semester enrollments for in-progress display
+        try {
+          const enrollRes = await api.get('/enrollments?semester=Spring+2026')
+          const enrollments = Array.isArray(enrollRes.data) ? enrollRes.data : []
+          if (enrollments.length > 0) {
+            const sorted = transcriptData.semesters
+            const lastCgpa = sorted.length > 0 ? sorted[sorted.length - 1].cgpa : 0
+            const currentSem = {
+              name: 'Spring 2026',
+              crAttempted: enrollments.reduce((s, e) => s + (e.creditHours || 0), 0),
+              crEarned: 0,
+              sgpa: 0,
+              cgpa: lastCgpa,
+              courses: enrollments.map(e => ({
+                code: e.courseCode,
+                name: e.courseName,
+                cr: e.creditHours,
+                grade: 'I',
+                points: 0,
+              })),
+            }
+            transcriptData.semesters = [...sorted, currentSem]
+          }
+        } catch { /* ignore */ }
+
+        setApiData(transcriptData)
       } catch {
         setApiData(null)
       } finally {

@@ -78,7 +78,7 @@ export default function Attendance() {
         setApiData(arr.map(c => ({
           code: c.courseCode,
           name: c.courseName,
-          percentage: c.percentage,
+          percentage: Math.round(c.percentage),
           records: (c.records || []).map(r => ({
             no: r.lectureNo,
             date: r.date,

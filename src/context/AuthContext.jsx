@@ -37,6 +37,9 @@ export function AuthProvider({ children }) {
     const userData = {
       rollNo: data.rollNumber || data.rollNo,
       name: data.name,
+      section: data.section,
+      degree: data.degree,
+      campus: data.campus,
     }
   
     localStorage.setItem('flex_token', jwt)

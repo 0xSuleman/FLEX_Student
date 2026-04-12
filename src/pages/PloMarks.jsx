@@ -3,7 +3,7 @@ import { Radar, TrendingUp, TrendingDown } from 'lucide-react'
 import api from '../services/api'
 
 const MOCK_PLOS = [
-  { plo: 'PLO 1', name: 'Engineering Knowledge', score: 85, course: 'CS3001 — Software Engineering', assessment: 'Midterm, Final' },
+  { plo: 'PLO 1', name: 'Engineering Knowledge', score: 85, course: 'CS3001 — Software Engineering', assessment: 'Sessional 1, Final' },
   { plo: 'PLO 2', name: 'Problem Analysis', score: 78, course: 'CS3002 — Database Systems', assessment: 'Assignments, Project' },
   { plo: 'PLO 3', name: 'Design & Development', score: 82, course: 'CS3001 — Software Engineering', assessment: 'Project, Lab' },
   { plo: 'PLO 4', name: 'Investigation', score: 70, course: 'CS3003 — Operating Systems', assessment: 'Lab, Assignment' },

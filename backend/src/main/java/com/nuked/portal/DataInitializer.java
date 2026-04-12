@@ -65,6 +65,13 @@ public class DataInitializer implements CommandLineRunner {
     private static final String[] GRADES = {"A", "A-", "B+", "B", "B-", "C+"};
     private static final double[] GRADE_POINTS = {4.0, 3.67, 3.33, 3.0, 2.67, 2.33};
 
+    /** Pick {@code count} random items from pool without replacement. */
+    private List<Course> pickRandom(List<Course> pool, int count, Random rng) {
+        List<Course> shuffled = new ArrayList<>(pool);
+        Collections.shuffle(shuffled, rng);
+        return shuffled.subList(0, Math.min(count, shuffled.size()));
+    }
+
     @Override
     public void run(String... args) throws Exception {
 
@@ -80,7 +87,9 @@ public class DataInitializer implements CommandLineRunner {
         // COURSES  (semesters 1-8)
         // ===================================================================
 
-        // Semester 1 — Fall 2024
+        // ---------------------------------------------------------------
+        // Semester 1 — Fall 2024 (all core, everyone takes them)
+        // ---------------------------------------------------------------
         Course cs1001 = createCourse("CS1001", "Introduction to Computing", 3, Course.CourseType.CORE, "Fall 2024");
         Course cs1002 = createCourse("CS1002", "Programming Fundamentals", 3, Course.CourseType.CORE, "Fall 2024");
         Course mt1001 = createCourse("MT1001", "Calculus and Analytical Geometry", 3, Course.CourseType.CORE, "Fall 2024");
@@ -88,7 +97,9 @@ public class DataInitializer implements CommandLineRunner {
         Course hu1001 = createCourse("HU1001", "English Composition", 3, Course.CourseType.CORE, "Fall 2024");
         List<Course> sem1Courses = Arrays.asList(cs1001, cs1002, mt1001, ee1001, hu1001);
 
-        // Semester 2 — Spring 2025
+        // ---------------------------------------------------------------
+        // Semester 2 — Spring 2025 (all core, everyone takes them)
+        // ---------------------------------------------------------------
         Course cs2001 = createCourse("CS2001", "Object Oriented Programming", 4, Course.CourseType.CORE, "Spring 2025");
         Course cs2002 = createCourse("CS2002", "Data Structures", 4, Course.CourseType.CORE, "Spring 2025");
         Course mt2003 = createCourse("MT2003", "Linear Algebra", 3, Course.CourseType.CORE, "Spring 2025");
@@ -96,64 +107,90 @@ public class DataInitializer implements CommandLineRunner {
         Course hs2005 = createCourse("HS2005", "Islamic Studies", 3, Course.CourseType.CORE, "Spring 2025");
         List<Course> sem2Courses = Arrays.asList(cs2001, cs2002, mt2003, cs2004, hs2005);
 
-        // Semester 3 — Fall 2025
+        // ---------------------------------------------------------------
+        // Semester 3 — Fall 2025 (3 core + elective pool of 4, pick 2)
+        // ---------------------------------------------------------------
         Course cs3004 = createCourse("CS3004", "Computer Networks", 3, Course.CourseType.CORE, "Fall 2025");
         Course cs3005 = createCourse("CS3005", "Discrete Structures", 3, Course.CourseType.CORE, "Fall 2025");
         Course mt3006 = createCourse("MT3006", "Differential Equations", 3, Course.CourseType.CORE, "Fall 2025");
-        Course hs3007 = createCourse("HS3007", "Pakistan Studies", 2, Course.CourseType.CORE, "Fall 2025");
-        Course cs3008 = createCourse("CS3008", "Assembly Language", 3, Course.CourseType.CORE, "Fall 2025");
-        List<Course> sem3Courses = Arrays.asList(cs3004, cs3005, mt3006, hs3007, cs3008);
+        List<Course> sem3Core = Arrays.asList(cs3004, cs3005, mt3006);
 
-        // Semester 4 — Spring 2026 (current)
+        Course hs3007 = createCourse("HS3007", "Pakistan Studies", 2, Course.CourseType.ELECTIVE, "Fall 2025");
+        Course cs3008 = createCourse("CS3008", "Assembly Language", 3, Course.CourseType.ELECTIVE, "Fall 2025");
+        Course cs3009 = createCourse("CS3009", "Web Technologies", 3, Course.CourseType.ELECTIVE, "Fall 2025");
+        Course cs3010 = createCourse("CS3010", "Software Project Management", 3, Course.CourseType.ELECTIVE, "Fall 2025");
+        List<Course> sem3ElectivePool = Arrays.asList(hs3007, cs3008, cs3009, cs3010);
+
+        // ---------------------------------------------------------------
+        // Semester 4 — Spring 2026 (current) (3 core + elective pool of 4, pick 2)
+        // ---------------------------------------------------------------
         Course cs3001 = createCourse("CS3001", "Software Engineering", 3, Course.CourseType.CORE, "Spring 2026");
         Course cs3002 = createCourse("CS3002", "Database Systems", 4, Course.CourseType.CORE, "Spring 2026");
         Course cs3003 = createCourse("CS3003", "Operating Systems", 3, Course.CourseType.CORE, "Spring 2026");
-        Course mt3005 = createCourse("MT3005", "Probability & Statistics", 3, Course.CourseType.CORE, "Spring 2026");
-        Course hs3006 = createCourse("HS3006", "Technical Writing", 2, Course.CourseType.CORE, "Spring 2026");
-        List<Course> sem4Courses = Arrays.asList(cs3001, cs3002, cs3003, mt3005, hs3006);
+        List<Course> sem4Core = Arrays.asList(cs3001, cs3002, cs3003);
 
-        // Semester 5 — Fall 2026
+        Course mt3005 = createCourse("MT3005", "Probability & Statistics", 3, Course.CourseType.ELECTIVE, "Spring 2026");
+        Course hs3006 = createCourse("HS3006", "Technical Writing", 2, Course.CourseType.ELECTIVE, "Spring 2026");
+        Course cs3011 = createCourse("CS3011", "Human Computer Interaction", 3, Course.CourseType.ELECTIVE, "Spring 2026");
+        Course cs3012 = createCourse("CS3012", "Mobile App Development", 3, Course.CourseType.ELECTIVE, "Spring 2026");
+        List<Course> sem4ElectivePool = Arrays.asList(mt3005, hs3006, cs3011, cs3012);
+
+        // ---------------------------------------------------------------
+        // Semester 5 — Fall 2026 (2 core + elective pool of 5, pick 2)
+        // ---------------------------------------------------------------
         Course cs4001 = createCourse("CS4001", "Artificial Intelligence", 3, Course.CourseType.CORE, "Fall 2026");
         Course cs4002 = createCourse("CS4002", "Compiler Construction", 3, Course.CourseType.CORE, "Fall 2026");
-        Course cs4003 = createCourse("CS4003", "Computer Architecture", 3, Course.CourseType.CORE, "Fall 2026");
-        Course cs4004 = createCourse("CS4004", "Theory of Automata", 3, Course.CourseType.CORE, "Fall 2026");
-        Course hs4005 = createCourse("HS4005", "Professional Practices", 3, Course.CourseType.CORE, "Fall 2026");
-        List<Course> sem5Courses = Arrays.asList(cs4001, cs4002, cs4003, cs4004, hs4005);
+        List<Course> sem5Core = Arrays.asList(cs4001, cs4002);
 
-        // Semester 6 — Spring 2027
+        Course cs4003 = createCourse("CS4003", "Computer Architecture", 3, Course.CourseType.ELECTIVE, "Fall 2026");
+        Course cs4004 = createCourse("CS4004", "Theory of Automata", 3, Course.CourseType.ELECTIVE, "Fall 2026");
+        Course hs4005 = createCourse("HS4005", "Professional Practices", 3, Course.CourseType.ELECTIVE, "Fall 2026");
+        Course cs4006 = createCourse("CS4006", "Data Mining", 3, Course.CourseType.ELECTIVE, "Fall 2026");
+        Course cs4007 = createCourse("CS4007", "Embedded Systems", 3, Course.CourseType.ELECTIVE, "Fall 2026");
+        List<Course> sem5ElectivePool = Arrays.asList(cs4003, cs4004, hs4005, cs4006, cs4007);
+
+        // ---------------------------------------------------------------
+        // Semester 6 — Spring 2027 (2 core + elective pool of 5, pick 2)
+        // ---------------------------------------------------------------
         Course cs5001 = createCourse("CS5001", "Design & Analysis of Algorithms", 3, Course.CourseType.CORE, "Spring 2027");
         Course cs5002 = createCourse("CS5002", "Parallel & Distributed Computing", 3, Course.CourseType.CORE, "Spring 2027");
+        List<Course> sem6Core = Arrays.asList(cs5001, cs5002);
+
         Course cs5003 = createCourse("CS5003", "Information Security", 3, Course.CourseType.ELECTIVE, "Spring 2027");
         Course cs5004 = createCourse("CS5004", "Machine Learning", 3, Course.CourseType.ELECTIVE, "Spring 2027");
-        Course hs5005 = createCourse("HS5005", "Entrepreneurship", 3, Course.CourseType.CORE, "Spring 2027");
-        List<Course> sem6Courses = Arrays.asList(cs5001, cs5002, cs5003, cs5004, hs5005);
+        Course hs5005 = createCourse("HS5005", "Entrepreneurship", 3, Course.CourseType.ELECTIVE, "Spring 2027");
+        Course cs5006 = createCourse("CS5006", "DevOps Engineering", 3, Course.CourseType.ELECTIVE, "Spring 2027");
+        Course cs5007 = createCourse("CS5007", "Software Testing & QA", 3, Course.CourseType.ELECTIVE, "Spring 2027");
+        List<Course> sem6ElectivePool = Arrays.asList(cs5003, cs5004, hs5005, cs5006, cs5007);
 
-        // Semester 7 — Fall 2027
+        // ---------------------------------------------------------------
+        // Semester 7 — Fall 2027 (2 core + elective pool of 4, pick 2)
+        // ---------------------------------------------------------------
         Course cs6001 = createCourse("CS6001", "Final Year Project I", 3, Course.CourseType.CORE, "Fall 2027");
+        Course mt6005 = createCourse("MT6005", "Numerical Computing", 3, Course.CourseType.CORE, "Fall 2027");
+        List<Course> sem7Core = Arrays.asList(cs6001, mt6005);
+
         Course cs6002 = createCourse("CS6002", "Web Engineering", 3, Course.CourseType.ELECTIVE, "Fall 2027");
         Course cs6003 = createCourse("CS6003", "Cloud Computing", 3, Course.CourseType.ELECTIVE, "Fall 2027");
         Course cs6004 = createCourse("CS6004", "Deep Learning", 3, Course.CourseType.ELECTIVE, "Fall 2027");
-        Course mt6005 = createCourse("MT6005", "Numerical Computing", 3, Course.CourseType.CORE, "Fall 2027");
-        List<Course> sem7Courses = Arrays.asList(cs6001, cs6002, cs6003, cs6004, mt6005);
+        Course cs6005 = createCourse("CS6005", "Blockchain & Crypto", 3, Course.CourseType.ELECTIVE, "Fall 2027");
+        List<Course> sem7ElectivePool = Arrays.asList(cs6002, cs6003, cs6004, cs6005);
 
-        // Semester 8 — Spring 2028
+        // ---------------------------------------------------------------
+        // Semester 8 — Spring 2028 (2 core + elective pool of 4, pick 2)
+        // ---------------------------------------------------------------
         Course cs7001 = createCourse("CS7001", "Final Year Project II", 3, Course.CourseType.CORE, "Spring 2028");
+        Course hs7004 = createCourse("HS7004", "Community Service", 1, Course.CourseType.CORE, "Spring 2028");
+        List<Course> sem8Core = Arrays.asList(cs7001, hs7004);
+
         Course cs7002 = createCourse("CS7002", "NLP", 3, Course.CourseType.ELECTIVE, "Spring 2028");
         Course cs7003 = createCourse("CS7003", "Computer Vision", 3, Course.CourseType.ELECTIVE, "Spring 2028");
-        Course hs7004 = createCourse("HS7004", "Community Service", 1, Course.CourseType.CORE, "Spring 2028");
-        List<Course> sem8Courses = Arrays.asList(cs7001, cs7002, cs7003, hs7004);
+        Course cs7005 = createCourse("CS7005", "Internet of Things", 3, Course.CourseType.ELECTIVE, "Spring 2028");
+        Course cs7006 = createCourse("CS7006", "Robotics", 3, Course.CourseType.ELECTIVE, "Spring 2028");
+        List<Course> sem8ElectivePool = Arrays.asList(cs7002, cs7003, cs7005, cs7006);
 
-        // All semester course lists for study plan
-        @SuppressWarnings("unchecked")
-        List<Course>[] allSemCourses = new List[]{
-                sem1Courses, sem2Courses, sem3Courses, sem4Courses,
-                sem5Courses, sem6Courses, sem7Courses, sem8Courses
-        };
-
-        // Completed semester data: courses, semester label, total credits
+        // Completed semester labels
         String[] completedSemesters = {"Fall 2024", "Spring 2025", "Fall 2025"};
-        List<Course>[] completedCourses = new List[]{sem1Courses, sem2Courses, sem3Courses};
-        int[] semCredits = {15, 17, 14}; // sum of credits per semester
 
         // ===================================================================
         // STUDENT DATA ARRAYS
@@ -223,6 +260,22 @@ public class DataInitializer implements CommandLineRunner {
         String[] bloodGroups = {"O+", "A+", "B+", "AB+", "O-", "A-", "B+", "O+", "A+", "B+",
                 "AB-", "O+", "A+", "B-", "O+", "A+", "B+", "AB+", "O-", "A+"};
 
+        // Degree assignments: 0-9 BS(SE), 10-14 BS(CS), 15-19 BS(AI)
+        String[] degrees = {
+                "BS(SE)", "BS(SE)", "BS(SE)", "BS(SE)", "BS(SE)",
+                "BS(SE)", "BS(SE)", "BS(SE)", "BS(SE)", "BS(SE)",
+                "BS(CS)", "BS(CS)", "BS(CS)", "BS(CS)", "BS(CS)",
+                "BS(AI)", "BS(AI)", "BS(AI)", "BS(AI)", "BS(AI)"
+        };
+
+        // Section assignments: 0-6 A, 7-13 B, 14-19 C
+        String[] sections = new String[20];
+        for (int i = 0; i < 20; i++) {
+            if (i <= 6)       sections[i] = "BSE-243A";
+            else if (i <= 13) sections[i] = "BSE-243B";
+            else              sections[i] = "BSE-243C";
+        }
+
         // Encoded passwords (first student different)
         String encodedPassword123 = passwordEncoder.encode("password123");
         String encodedStudent123 = passwordEncoder.encode("student123");
@@ -234,7 +287,8 @@ public class DataInitializer implements CommandLineRunner {
         for (int s = 0; s < 20; s++) {
             String rollNo = rollNumbers[s];
             String password = (s == 0) ? encodedPassword123 : encodedStudent123;
-            String section = (s % 2 == 0) ? "BSE-243A" : "BSE-243B";
+            String section = sections[s];
+            String degree = degrees[s];
 
             // --- Student ---
             Student student = createStudent(
@@ -243,7 +297,7 @@ public class DataInitializer implements CommandLineRunner {
                     LocalDate.of(2005, 1 + (s % 12), 1 + (s % 28)),
                     String.format("35202-%07d-%d", 1000000 + s * 111111, (s % 2 == 0) ? 7 : 2),
                     String.format("03%d-%07d", 10 + (s % 6), 1000000 + s * 123456),
-                    bloodGroups[s], section
+                    bloodGroups[s], section, degree
             );
 
             // --- Family Info ---
@@ -258,6 +312,38 @@ public class DataInitializer implements CommandLineRunner {
                     String.format("03%d-%07d", 11 + (s % 5), 2000000 + s * 654321));
 
             // ===============================================================
+            // Build per-student course lists for semesters 3-8 (varied electives)
+            // ===============================================================
+
+            // Semester 3: 3 core + 2 random electives
+            List<Course> studentSem3 = new ArrayList<>(sem3Core);
+            studentSem3.addAll(pickRandom(sem3ElectivePool, 2, rng));
+
+            // Semester 4: 3 core + 2 random electives
+            List<Course> studentSem4 = new ArrayList<>(sem4Core);
+            studentSem4.addAll(pickRandom(sem4ElectivePool, 2, rng));
+
+            // Semester 5: 2 core + 2 random electives
+            List<Course> studentSem5 = new ArrayList<>(sem5Core);
+            studentSem5.addAll(pickRandom(sem5ElectivePool, 2, rng));
+
+            // Semester 6: 2 core + 2 random electives
+            List<Course> studentSem6 = new ArrayList<>(sem6Core);
+            studentSem6.addAll(pickRandom(sem6ElectivePool, 2, rng));
+
+            // Semester 7: 2 core + 2 random electives
+            List<Course> studentSem7 = new ArrayList<>(sem7Core);
+            studentSem7.addAll(pickRandom(sem7ElectivePool, 2, rng));
+
+            // Semester 8: 2 core + 2 random electives
+            List<Course> studentSem8 = new ArrayList<>(sem8Core);
+            studentSem8.addAll(pickRandom(sem8ElectivePool, 2, rng));
+
+            // Completed semesters: sem1 (all same), sem2 (all same), sem3 (varied)
+            @SuppressWarnings("unchecked")
+            List<Course>[] completedCourses = new List[]{sem1Courses, sem2Courses, studentSem3};
+
+            // ===============================================================
             // ENROLLMENTS — Semesters 1-3 (completed, with grades)
             // ===============================================================
             double totalWeightedPoints = 0.0;
@@ -266,10 +352,11 @@ public class DataInitializer implements CommandLineRunner {
             for (int sem = 0; sem < 3; sem++) {
                 List<Course> courses = completedCourses[sem];
                 String semester = completedSemesters[sem];
-                String enrollSection = (s % 2 == 0) ? "BSE-243A" : "BSE-243B";
+
+                // Dynamic credit calculation based on actual enrolled courses
+                int semTotalCredits = courses.stream().mapToInt(Course::getCreditHours).sum();
 
                 double semWeightedPoints = 0.0;
-                int semTotalCredits = semCredits[sem];
 
                 // Enrollments for semester 3 courses will also get feedback (SUBMITTED)
                 List<Enrollment> sem3Enrollments = new ArrayList<>();
@@ -279,8 +366,11 @@ public class DataInitializer implements CommandLineRunner {
                     String grade = GRADES[gradeIdx];
                     double points = GRADE_POINTS[gradeIdx];
 
-                    Enrollment enrollment = createEnrollment(student, course, semester, enrollSection,
+                    Enrollment enrollment = createEnrollment(student, course, semester, section,
                             grade, points, "Completed", "ENROLLED");
+
+                    // Generate full marks for completed semesters
+                    generateCompleteMarks(enrollment, rng);
 
                     semWeightedPoints += points * course.getCreditHours();
 
@@ -316,11 +406,10 @@ public class DataInitializer implements CommandLineRunner {
             // ===============================================================
             // ENROLLMENTS — Semester 4, Spring 2026 (in progress)
             // ===============================================================
-            String currentSection = (s % 2 == 0) ? "BSE-243A" : "BSE-243B";
             List<Enrollment> currentEnrollments = new ArrayList<>();
 
-            for (Course course : sem4Courses) {
-                Enrollment enrollment = createEnrollment(student, course, "Spring 2026", currentSection,
+            for (Course course : studentSem4) {
+                Enrollment enrollment = createEnrollment(student, course, "Spring 2026", section,
                         null, null, null, "IN_PROGRESS");
                 currentEnrollments.add(enrollment);
             }
@@ -351,7 +440,6 @@ public class DataInitializer implements CommandLineRunner {
             // ===============================================================
             // FEE CHALLANS — 4 challans (semesters 1-3 PAID, semester 4 UNPAID)
             // ===============================================================
-            int baseAmount = 175000 + rng.nextInt(20001); // 175000-195000
             String challanPrefix = String.format("CHN-%s", rollNo.replace("L-", ""));
 
             // Semester 1 — Fall 2024 (PAID)
@@ -398,8 +486,14 @@ public class DataInitializer implements CommandLineRunner {
                     null);
 
             // ===============================================================
-            // STUDY PLAN — all 8 semesters
+            // STUDY PLAN — all 8 semesters (per-student elective selections)
             // ===============================================================
+            @SuppressWarnings("unchecked")
+            List<Course>[] allSemCourses = new List[]{
+                    sem1Courses, sem2Courses, studentSem3, studentSem4,
+                    studentSem5, studentSem6, studentSem7, studentSem8
+            };
+
             for (int semIdx = 0; semIdx < allSemCourses.length; semIdx++) {
                 for (Course course : allSemCourses[semIdx]) {
                     createStudyPlanCourse(student, course, "Semester " + (semIdx + 1));
@@ -455,7 +549,7 @@ public class DataInitializer implements CommandLineRunner {
 
     private Student createStudent(String rollNo, String encodedPassword, String name,
                                   String gender, String email, LocalDate dob, String cnic,
-                                  String mobileNo, String bloodGroup, String section) {
+                                  String mobileNo, String bloodGroup, String section, String degree) {
         Student student = new Student();
         student.setRollNo(rollNo);
         student.setPassword(encodedPassword);
@@ -467,7 +561,7 @@ public class DataInitializer implements CommandLineRunner {
         student.setMobileNo(mobileNo);
         student.setBloodGroup(bloodGroup);
         student.setNationality("Pakistani");
-        student.setDegree("BS(SE)");
+        student.setDegree(degree);
         student.setBatch("Fall 2024");
         student.setSection(section);
         student.setCampus("Lahore");
@@ -545,15 +639,15 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void generateMarks(Enrollment enrollment, Random rng) {
-        // Each course gets 2-4 evaluations
-        int numEvals = 2 + rng.nextInt(3); // 2, 3, or 4
-
         String[][] evalDefs = {
                 {"Quiz 1", "QUIZ", "5.0", "10.0"},
                 {"Quiz 2", "QUIZ", "5.0", "10.0"},
                 {"Assignment 1", "ASSIGNMENT", "5.0", "20.0"},
-                {"Sessional 1", "SESSIONAL", "15.0", "40.0"}
+                {"Assignment 2", "ASSIGNMENT", "5.0", "20.0"},
+                {"Sessional 1", "SESSIONAL_1", "15.0", "40.0"},
         };
+
+        int numEvals = evalDefs.length;
 
         for (int i = 0; i < numEvals; i++) {
             String[] def = evalDefs[i];
@@ -577,6 +671,44 @@ public class DataInitializer implements CommandLineRunner {
 
             // Max: 88-100% of total
             double max = Math.round(total * (0.88 + rng.nextDouble() * 0.12) * 10.0) / 10.0;
+
+            Marks marks = new Marks();
+            marks.setEnrollment(enrollment);
+            marks.setEvaluationType(Marks.EvaluationType.valueOf(def[1]));
+            marks.setEvaluationName(def[0]);
+            marks.setWeightage(weightage);
+            marks.setObtained(obtained);
+            marks.setTotal(total);
+            marks.setAverage(average);
+            marks.setStdDev(stdDev);
+            marks.setMin(min);
+            marks.setMax(max);
+            marksRepository.save(marks);
+        }
+    }
+
+    private void generateCompleteMarks(Enrollment enrollment, Random rng) {
+        // All evaluations for a completed course (weightage sums to 100%)
+        String[][] evalDefs = {
+                {"Quiz 1", "QUIZ", "5.0", "10.0"},
+                {"Quiz 2", "QUIZ", "5.0", "10.0"},
+                {"Assignment 1", "ASSIGNMENT", "5.0", "20.0"},
+                {"Assignment 2", "ASSIGNMENT", "5.0", "20.0"},
+                {"Sessional 1", "SESSIONAL_1", "15.0", "40.0"},
+                {"Sessional 2", "SESSIONAL_2", "15.0", "40.0"},
+                {"Final", "FINAL", "50.0", "100.0"},
+        };
+
+        for (String[] def : evalDefs) {
+            double total = Double.parseDouble(def[3]);
+            double weightage = Double.parseDouble(def[2]);
+            double obtainedPct = 0.55 + rng.nextDouble() * 0.40;
+            double obtained = Math.round(total * obtainedPct * 10.0) / 10.0;
+            double avgPct = 0.50 + rng.nextDouble() * 0.25;
+            double average = Math.round(total * avgPct * 10.0) / 10.0;
+            double stdDev = Math.round(total * (0.08 + rng.nextDouble() * 0.10) * 10.0) / 10.0;
+            double min = Math.round(total * (0.25 + rng.nextDouble() * 0.20) * 10.0) / 10.0;
+            double max = Math.round(total * (0.85 + rng.nextDouble() * 0.15) * 10.0) / 10.0;
 
             Marks marks = new Marks();
             marks.setEnrollment(enrollment);

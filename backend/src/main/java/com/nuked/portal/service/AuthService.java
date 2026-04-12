@@ -26,6 +26,6 @@ public class AuthService {
         }
 
         String token = jwtUtil.generateToken(student.getRollNo());
-        return new LoginResponse(token, student.getRollNo(), student.getName());
+        return new LoginResponse(token, student.getRollNo(), student.getName(), student.getSection(), student.getDegree(), student.getCampus());
     }
 }

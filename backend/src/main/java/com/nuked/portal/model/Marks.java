@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 public class Marks {
 
     public enum EvaluationType {
-        QUIZ, ASSIGNMENT, SESSIONAL, MIDTERM, FINAL
+        QUIZ, ASSIGNMENT, SESSIONAL_1, SESSIONAL_2, FINAL
     }
 
     @Id

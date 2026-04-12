@@ -9,4 +9,7 @@ public class LoginResponse {
     private String token;
     private String rollNumber;
     private String name;
+    private String section;
+    private String degree;
+    private String campus;
 }

@@ -3,9 +3,33 @@ import { AlertTriangle, Upload, CheckCircle2, Info } from 'lucide-react'
 import api from '../services/api'
 
 const SEMESTERS = ['Spring 2026', 'Fall 2025']
-const EVAL_TYPES = ['Mid 1', 'Mid 2', 'Final']
+const EVAL_TYPES = ['Sessional 1', 'Sessional 2', 'Final']
 const REASONS = ['Medical Emergency', 'Family Emergency', 'Accident / Injury', 'Overlap with another exam', 'Other']
 const FEE = 2000
+
+// Exam dates and retake windows (3-5 days after exam ends)
+const RETAKE_WINDOWS = {
+  'Spring 2026': {
+    'Sessional 1': { examEnd: new Date('2026-03-10'), retakeEnd: new Date('2026-03-15') },
+    'Sessional 2': { examEnd: new Date('2026-04-20'), retakeEnd: new Date('2026-04-25') },
+    'Final':       { examEnd: new Date('2026-05-20'), retakeEnd: new Date('2026-05-25') },
+  },
+  'Fall 2025': {
+    'Sessional 1': { examEnd: new Date('2025-10-10'), retakeEnd: new Date('2025-10-15') },
+    'Sessional 2': { examEnd: new Date('2025-11-15'), retakeEnd: new Date('2025-11-20') },
+    'Final':       { examEnd: new Date('2025-12-20'), retakeEnd: new Date('2025-12-25') },
+  },
+}
+
+function getRetakeStatus(semester, evalType) {
+  const now = new Date()
+  const windows = RETAKE_WINDOWS[semester]
+  if (!windows || !windows[evalType]) return { open: false, reason: 'No schedule available' }
+  const { examEnd, retakeEnd } = windows[evalType]
+  if (now < examEnd) return { open: false, reason: `Exam not conducted yet. Scheduled to end ${examEnd.toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' })}.` }
+  if (now > retakeEnd) return { open: false, reason: `Retake window closed on ${retakeEnd.toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' })}.` }
+  return { open: true, reason: `Window open until ${retakeEnd.toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' })}.` }
+}
 
 const MOCK_COURSES = [
   { code: 'CS3001', name: 'Software Engineering', cr: 3 },
@@ -57,6 +81,7 @@ export default function RetakeExam() {
     setFile(f)
   }
 
+  const retakeStatus = getRetakeStatus(semester, evalType)
   const totalFee = selected.length * FEE
 
   const handleSubmit = async () => {
@@ -123,77 +148,97 @@ export default function RetakeExam() {
         </div>
       </div>
 
-      {/* COURSES */}
-      <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.15s' }}>
-        <div className="px-5 py-3.5 border-b-2 border-ink bg-tan">
-          <h3 className="heading-retro text-sm">Eligible Courses</h3>
-        </div>
-        {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+      {/* RETAKE WINDOW STATUS */}
+      {!retakeStatus.open && (
+        <div className="chunky-card p-5 bg-mustard/20 cascade-in" style={{ animationDelay: '0.12s' }}>
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={20} className="text-rust shrink-0 mt-0.5" strokeWidth={2.5} />
+            <div>
+              <h3 className="font-display text-[10px] text-ink uppercase mb-2">Retake Window Closed</h3>
+              <p className="text-xs text-cocoa font-medium">
+                {retakeStatus.reason} Retake requests can only be submitted within 4 days after the exam.
+              </p>
+            </div>
           </div>
-        ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-bone border-b-2 border-ink text-coffee">
-              <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest w-12">Pick</th>
-              <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Code</th>
-              <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Course</th>
-              <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest">CrHrs</th>
-              <th className="px-5 py-2.5 text-right text-[10px] font-extrabold uppercase tracking-widest">Fee</th>
-            </tr>
-          </thead>
-          <tbody>
-            {courses.map((c, i) => (
-              <tr key={c.code} onClick={() => toggle(c.code)} className={`border-b border-dashed border-cocoa/30 cursor-pointer ${
-                selected.includes(c.code) ? 'bg-burn/10' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
-              } hover:bg-tan/30 transition-colors`}>
-                <td className="px-5 py-3 text-center">
-                  <input type="checkbox" checked={selected.includes(c.code)} onChange={() => toggle(c.code)} className="w-4 h-4 accent-cocoa" />
-                </td>
-                <td className="px-5 py-3 font-extrabold text-ink">{c.code}</td>
-                <td className="px-5 py-3 text-ink">{c.name}</td>
-                <td className="px-5 py-3 text-center"><span className="tag bg-bone text-ink">{c.cr}</span></td>
-                <td className="px-5 py-3 text-right"><span className="tag bg-bad/15 text-ink">Rs {FEE.toLocaleString()}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        )}
-      </div>
-
-      {/* REASON + UPLOAD */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="chunky-card p-5 cascade-in" style={{ animationDelay: '0.2s' }}>
-          <label className="block font-display text-[10px] text-ink uppercase mb-3">Reason</label>
-          <select value={reason} onChange={(e) => setReason(e.target.value)} className="w-full styled-select">
-            {REASONS.map(r => <option key={r}>{r}</option>)}
-          </select>
-        </div>
-        <div className="chunky-card p-5 cascade-in" style={{ animationDelay: '0.25s' }}>
-          <label className="block font-display text-[10px] text-ink uppercase mb-3">Supporting PDF (max 3MB)</label>
-          <label className="btn-ghost cursor-pointer inline-flex">
-            <Upload size={14} strokeWidth={3} />
-            {file ? file.name : 'Choose PDF'}
-            <input type="file" accept=".pdf" onChange={onFile} className="hidden" />
-          </label>
-          {file && <div className="text-[10px] text-moss font-extrabold mt-2 uppercase">✓ {(file.size / 1024).toFixed(0)} KB</div>}
-          {error && <div className="text-[10px] text-bad font-extrabold mt-2">{error}</div>}
-        </div>
-      </div>
-
-      {/* TOTAL */}
-      {selected.length > 0 && (
-        <div className="chunky-card p-4 bg-coffee text-bone cascade-in flex items-center justify-between">
-          <span className="flex items-center gap-2 font-display text-[11px] uppercase tracking-wider">
-            <Info size={14} className="text-mossL" />
-            Total Fee
-          </span>
-          <span className="font-black text-xl text-mossL">Rs {totalFee.toLocaleString()}</span>
         </div>
       )}
 
-      <button onClick={handleSubmit} className="btn-primary cascade-in">Submit Request</button>
+      {retakeStatus.open && (
+        <>
+          {/* COURSES */}
+          <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.15s' }}>
+            <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
+              <h3 className="heading-retro text-sm">Eligible Courses</h3>
+              <span className="tag bg-moss text-cream text-[9px]">{retakeStatus.reason}</span>
+            </div>
+            {loading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+              </div>
+            ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-bone border-b-2 border-ink text-coffee">
+                  <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest w-12">Pick</th>
+                  <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Code</th>
+                  <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Course</th>
+                  <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest">CrHrs</th>
+                  <th className="px-5 py-2.5 text-right text-[10px] font-extrabold uppercase tracking-widest">Fee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {courses.map((c, i) => (
+                  <tr key={c.code} onClick={() => toggle(c.code)} className={`border-b border-dashed border-cocoa/30 cursor-pointer ${
+                    selected.includes(c.code) ? 'bg-burn/10' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
+                  } hover:bg-tan/30 transition-colors`}>
+                    <td className="px-5 py-3 text-center">
+                      <input type="checkbox" checked={selected.includes(c.code)} onChange={() => toggle(c.code)} className="w-4 h-4 accent-cocoa" />
+                    </td>
+                    <td className="px-5 py-3 font-extrabold text-ink">{c.code}</td>
+                    <td className="px-5 py-3 text-ink">{c.name}</td>
+                    <td className="px-5 py-3 text-center"><span className="tag bg-bone text-ink">{c.cr}</span></td>
+                    <td className="px-5 py-3 text-right"><span className="tag bg-bad/15 text-ink">Rs {FEE.toLocaleString()}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            )}
+          </div>
+
+          {/* REASON + UPLOAD */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="chunky-card p-5 cascade-in" style={{ animationDelay: '0.2s' }}>
+              <label className="block font-display text-[10px] text-ink uppercase mb-3">Reason</label>
+              <select value={reason} onChange={(e) => setReason(e.target.value)} className="w-full styled-select">
+                {REASONS.map(r => <option key={r}>{r}</option>)}
+              </select>
+            </div>
+            <div className="chunky-card p-5 cascade-in" style={{ animationDelay: '0.25s' }}>
+              <label className="block font-display text-[10px] text-ink uppercase mb-3">Supporting PDF (max 3MB)</label>
+              <label className="btn-ghost cursor-pointer inline-flex">
+                <Upload size={14} strokeWidth={3} />
+                {file ? file.name : 'Choose PDF'}
+                <input type="file" accept=".pdf" onChange={onFile} className="hidden" />
+              </label>
+              {file && <div className="text-[10px] text-moss font-extrabold mt-2 uppercase">✓ {(file.size / 1024).toFixed(0)} KB</div>}
+              {error && <div className="text-[10px] text-bad font-extrabold mt-2">{error}</div>}
+            </div>
+          </div>
+
+          {/* TOTAL */}
+          {selected.length > 0 && (
+            <div className="chunky-card p-4 bg-coffee text-bone cascade-in flex items-center justify-between">
+              <span className="flex items-center gap-2 font-display text-[11px] uppercase tracking-wider">
+                <Info size={14} className="text-mossL" />
+                Total Fee
+              </span>
+              <span className="font-black text-xl text-mossL">Rs {totalFee.toLocaleString()}</span>
+            </div>
+          )}
+
+          <button onClick={handleSubmit} className="btn-primary cascade-in">Submit Request</button>
+        </>
+      )}
     </div>
   )
 }

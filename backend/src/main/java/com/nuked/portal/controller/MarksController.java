@@ -32,7 +32,7 @@ public class MarksController {
     public ResponseEntity<Map<String, Object>> getPloMarks(Authentication auth) {
         List<Map<String, Object>> ploScores = new ArrayList<>();
 
-        ploScores.add(Map.of("plo", "PLO 1", "name", "Engineering Knowledge", "score", 85, "course", "CS3001 — Software Engineering", "assessment", "Midterm, Final"));
+        ploScores.add(Map.of("plo", "PLO 1", "name", "Engineering Knowledge", "score", 85, "course", "CS3001 — Software Engineering", "assessment", "Sessional 1, Final"));
         ploScores.add(Map.of("plo", "PLO 2", "name", "Problem Analysis", "score", 78, "course", "CS3002 — Database Systems", "assessment", "Assignments, Project"));
         ploScores.add(Map.of("plo", "PLO 3", "name", "Design & Development", "score", 82, "course", "CS3001 — Software Engineering", "assessment", "Project, Lab"));
         ploScores.add(Map.of("plo", "PLO 4", "name", "Investigation", "score", 70, "course", "CS3003 — Operating Systems", "assessment", "Lab, Assignment"));
