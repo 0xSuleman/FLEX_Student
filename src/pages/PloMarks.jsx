@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react'
 import { Radar, TrendingUp, TrendingDown } from 'lucide-react'
+import api from '../services/api'
 
-const PLOS = [
+const MOCK_PLOS = [
   { plo: 'PLO 1', name: 'Engineering Knowledge', score: 85, course: 'CS3001 — Software Engineering', assessment: 'Midterm, Final' },
   { plo: 'PLO 2', name: 'Problem Analysis', score: 78, course: 'CS3002 — Database Systems', assessment: 'Assignments, Project' },
   { plo: 'PLO 3', name: 'Design & Development', score: 82, course: 'CS3001 — Software Engineering', assessment: 'Project, Lab' },
@@ -16,6 +18,30 @@ const PLOS = [
 ]
 
 export default function PloMarks() {
+  const [PLOS, setPLOS] = useState(MOCK_PLOS)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.get('/marks/plo')
+      .then(res => {
+        setPLOS(res.data.ploScores)
+      })
+      .catch(() => {
+        setPLOS(MOCK_PLOS)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   const overall = Math.round(PLOS.reduce((s, p) => s + p.score, 0) / PLOS.length)
   const strengths = [...PLOS].filter(p => p.score >= 80).sort((a, b) => b.score - a.score).slice(0, 3)
   const weaknesses = [...PLOS].filter(p => p.score < 75).sort((a, b) => a.score - b.score).slice(0, 3)

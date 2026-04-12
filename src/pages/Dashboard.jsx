@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import api from '../services/api'
 import {
   BookOpen, Wallet, Calendar, MessageSquare,
   ChevronLeft, ChevronRight, Sparkles, Clock, TrendingUp,
@@ -105,9 +107,70 @@ const gradeColor = (g) => {
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const [dashData, setDashData] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const res = await api.get('/dashboard')
+        setDashData(res.data)
+      } catch {
+        setDashData(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchDashboard()
+  }, [user])
+
+  // Merge API data with fallbacks
+  const personalInfo = dashData?.personalInfo || PERSONAL
+  const studentInfo = {
+    rollNo: personalInfo.rollNo || STUDENT.rollNo,
+    name: personalInfo.name || STUDENT.name,
+    degree: personalInfo.degree || STUDENT.degree,
+    batch: personalInfo.batch || STUDENT.batch,
+    section: personalInfo.section || STUDENT.section,
+    campus: personalInfo.campus || STUDENT.campus,
+    status: personalInfo.status || STUDENT.status,
+    cgpa: STUDENT.cgpa,
+    sgpa: STUDENT.sgpa,
+    creditsEarned: STUDENT.creditsEarned,
+    creditsAttempted: STUDENT.creditsAttempted,
+  }
+  const calendarEvents = (dashData?.academicCalendar || []).length > 0
+    ? dashData.academicCalendar.map((e) => ({
+        label: e.eventName,
+        range: e.endDate ? `${e.startDate} – ${e.endDate}` : e.startDate,
+        tone: 'tan',
+      }))
+    : CALENDAR_EVENTS
+  const contactInfo = dashData?.contactInfo || CONTACT.permanent
+  const familyInfo = dashData?.familyInfo || FAMILY
+  const personalDisplay = {
+    name: personalInfo.name || PERSONAL.name,
+    dob: personalInfo.dob || PERSONAL.dob,
+    bloodGroup: personalInfo.bloodGroup || PERSONAL.bloodGroup,
+    gender: personalInfo.gender || PERSONAL.gender,
+    cnic: personalInfo.cnic || PERSONAL.cnic,
+    nationality: personalInfo.nationality || PERSONAL.nationality,
+    email: personalInfo.email || PERSONAL.email,
+    mobile: personalInfo.mobileNo || personalInfo.mobile || PERSONAL.mobile,
+  }
+
   const aggAttendance = Math.round(ENROLLED.reduce((s, c) => s + c.attendance, 0) / ENROLLED.length)
-  const cgpaAnim = useCountUp(STUDENT.cgpa, 1500)
-  const sgpaAnim = useCountUp(STUDENT.sgpa, 1500)
+  const cgpaAnim = useCountUp(studentInfo.cgpa, 1500)
+  const sgpaAnim = useCountUp(studentInfo.sgpa, 1500)
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="grid grid-cols-12 gap-5 max-w-[1500px]">
@@ -120,7 +183,7 @@ export default function Dashboard() {
               Saturday · April 11, 2026
             </div>
             <h1 className="font-display text-2xl md:text-4xl text-ink leading-tight mt-3">
-              HELLO, {STUDENT.name.split(' ')[0].toUpperCase()}
+              HELLO, {studentInfo.name.split(' ')[0].toUpperCase()}
             </h1>
             <p className="text-sm text-cocoa mt-2">
               Spring 2026 · {ENROLLED.length} courses · Aggregate attendance {aggAttendance}%.
@@ -133,15 +196,15 @@ export default function Dashboard() {
         <div className="chunky-card p-5 cascade-in" style={{ animationDelay: '0.03s' }}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="heading-retro text-sm">// University Info</h3>
-            <span className="tag bg-moss text-cream">{STUDENT.status}</span>
+            <span className="tag bg-moss text-cream">{studentInfo.status}</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <InfoBox label="Roll No" value={STUDENT.rollNo} />
-            <InfoBox label="Degree" value={STUDENT.degree} />
-            <InfoBox label="Batch" value={STUDENT.batch} />
-            <InfoBox label="Section" value={STUDENT.section} />
-            <InfoBox label="Campus" value={STUDENT.campus} />
-            <InfoBox label="Status" value={STUDENT.status} />
+            <InfoBox label="Roll No" value={studentInfo.rollNo} />
+            <InfoBox label="Degree" value={studentInfo.degree} />
+            <InfoBox label="Batch" value={studentInfo.batch} />
+            <InfoBox label="Section" value={studentInfo.section} />
+            <InfoBox label="Campus" value={studentInfo.campus} />
+            <InfoBox label="Status" value={studentInfo.status} />
           </div>
         </div>
 
@@ -158,8 +221,8 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2 mt-4">
-                <MiniStat label="Cr. Earned" value={STUDENT.creditsEarned} />
-                <MiniStat label="Cr. Attempted" value={STUDENT.creditsAttempted} />
+                <MiniStat label="Cr. Earned" value={studentInfo.creditsEarned} />
+                <MiniStat label="Cr. Attempted" value={studentInfo.creditsAttempted} />
                 <MiniStat label="Rank" value="#12" />
               </div>
             </div>
@@ -302,7 +365,7 @@ export default function Dashboard() {
             <Calendar size={14} />
           </div>
           <div className="p-4 space-y-2.5">
-            {CALENDAR_EVENTS.map((e, i) => (
+            {calendarEvents.map((e, i) => (
               <div
                 key={i}
                 className="flex items-start gap-3 p-2.5 bg-bone border-2 border-ink rounded shadow-pixel-sm hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-pixel transition-all cascade-in"
@@ -324,14 +387,14 @@ export default function Dashboard() {
             <h3 className="heading-retro text-sm">// Personal Information</h3>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <InfoBox label="Name" value={PERSONAL.name} />
-            <InfoBox label="Date of Birth" value={PERSONAL.dob} />
-            <InfoBox label="Blood Group" value={PERSONAL.bloodGroup} />
-            <InfoBox label="Gender" value={PERSONAL.gender} />
-            <InfoBox label="CNIC" value={PERSONAL.cnic} />
-            <InfoBox label="Nationality" value={PERSONAL.nationality} />
-            <InfoBox label="Email" value={PERSONAL.email} />
-            <InfoBox label="Mobile" value={PERSONAL.mobile} />
+            <InfoBox label="Name" value={personalDisplay.name} />
+            <InfoBox label="Date of Birth" value={personalDisplay.dob} />
+            <InfoBox label="Blood Group" value={personalDisplay.bloodGroup} />
+            <InfoBox label="Gender" value={personalDisplay.gender} />
+            <InfoBox label="CNIC" value={personalDisplay.cnic} />
+            <InfoBox label="Nationality" value={personalDisplay.nationality} />
+            <InfoBox label="Email" value={personalDisplay.email} />
+            <InfoBox label="Mobile" value={personalDisplay.mobile} />
           </div>
         </div>
 
@@ -342,8 +405,8 @@ export default function Dashboard() {
             <Cpu size={14} className="text-ink" />
           </div>
           <div className="p-5 space-y-5">
-            <ContactBlock label="Permanent" data={CONTACT.permanent} />
-            <ContactBlock label="Current"   data={CONTACT.current}   />
+            <ContactBlock label="Permanent" data={contactInfo} />
+            <ContactBlock label="Current"   data={contactInfo} />
           </div>
         </div>
 
@@ -362,12 +425,12 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {FAMILY.map((f, i) => (
+              {familyInfo.map((f, i) => (
                 <tr key={i} className={`border-b border-dashed border-cocoa/30 ${i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'} hover:bg-tan/30 transition-colors`}>
                   <td className="px-3 py-3 font-extrabold text-ink text-xs">{f.relation}</td>
                   <td className="px-3 py-3 text-ink text-xs">{f.name}</td>
                   <td className="px-3 py-3 text-center">
-                    <span className={`tag ${f.tax === 'Filer' ? 'bg-moss text-cream' : 'bg-burn text-bone'}`}>{f.tax}</span>
+                    <span className={`tag ${(f.tax || f.taxWithholding) === 'Filer' ? 'bg-moss text-cream' : 'bg-burn text-bone'}`}>{f.tax || f.taxWithholding}</span>
                   </td>
                 </tr>
               ))}
@@ -395,24 +458,24 @@ export default function Dashboard() {
 
 function InfoBox({ label, value }) {
   return (
-    <div className="bg-bone border-2 border-ink rounded p-2.5">
-      <div className="text-[9px] font-extrabold text-coffee uppercase tracking-widest">{label}</div>
-      <div className="font-extrabold text-sm text-ink mt-1 truncate">{value}</div>
+    <div className="bg-cream border-2 border-ink rounded-md p-3 hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-pixel-sm transition-all">
+      <div className="text-[9px] font-extrabold text-burn uppercase tracking-widest mb-1">{label}</div>
+      <div className="font-extrabold text-sm text-ink truncate">{value}</div>
     </div>
   )
 }
 
 function ContactBlock({ label, data }) {
   return (
-    <div className="bg-bone border-2 border-ink rounded-md p-4 hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-pixel-sm transition-all">
-      <div className="flex items-center gap-2 mb-3 pb-2 border-b-2 border-dashed border-cocoa/30">
-        <span className="w-2 h-2 bg-burn rounded-sm" />
-        <h4 className="font-display text-[10px] text-ink uppercase tracking-widest">{label}</h4>
+    <div className="bg-cream border-2 border-ink rounded-md p-4 border-l-4 border-l-burn hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-pixel-sm transition-all">
+      <div className="flex items-center gap-2 mb-3 pb-2 border-b-2 border-dashed border-cocoa/20">
+        <span className="w-2.5 h-2.5 bg-burn rounded-sm" />
+        <h4 className="font-display text-[11px] text-ink uppercase tracking-widest">{label}</h4>
       </div>
-      <div className="space-y-2 text-xs">
+      <div className="space-y-2.5 text-xs">
         {Object.entries({ Address: data.address, 'Home Phone': data.phone, Postal: data.postal, City: data.city, Country: data.country }).map(([k, v]) => (
-          <div key={k} className="flex items-baseline gap-2">
-            <span className="text-[10px] font-extrabold text-coffee uppercase tracking-wider min-w-[64px]">{k}</span>
+          <div key={k} className="flex items-baseline gap-3">
+            <span className="text-[10px] font-extrabold text-coffee uppercase tracking-wider min-w-[72px]">{k}</span>
             <span className="text-ink font-bold flex-1 truncate">{v || '—'}</span>
           </div>
         ))}

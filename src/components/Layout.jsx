@@ -1,18 +1,12 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import {
   Home, BookOpen, User, Wallet, MessageSquare,
   LogOut, Search, Bell, Zap,
   Target, Award, BookMarked, Receipt, FilePen,
   RotateCcw, FileX, Layers, ClipboardList, Radar, Cpu,
 } from 'lucide-react'
-
-const STUDENT = {
-  name: 'Suleman Ahmed',
-  rollNo: '24L-3072',
-  section: 'BSE-243A',
-  campus: 'Lahore',
-}
 
 const NAV = [
   { group: null, items: [
@@ -54,6 +48,13 @@ const NOTIFICATIONS = [
 ]
 
 export default function Layout() {
+  const { user, logout } = useAuth()
+  const STUDENT = {
+    name: user?.name || 'Student',
+    rollNo: user?.rollNo || '—',
+    section: '—',
+    campus: '—',
+  }
   const [search, setSearch] = useState('')
   const [showNotifs, setShowNotifs] = useState(false)
   const [notifs, setNotifs] = useState(NOTIFICATIONS)
@@ -219,7 +220,7 @@ export default function Layout() {
                 )}
               </div>
               <button
-                onClick={() => navigate('/login')}
+                onClick={() => { logout(); navigate('/login') }}
                 className="bg-coffee/60 border-2 border-ink rounded-md px-3 py-1.5 text-bone text-[10px] font-extrabold uppercase tracking-wider hover:bg-bad hover:text-bone transition-all inline-flex items-center gap-1.5"
               >
                 <LogOut size={12} strokeWidth={2.8} />

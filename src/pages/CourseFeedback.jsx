@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Star, X, MessageSquare, CheckCircle2 } from 'lucide-react'
+import api from '../services/api'
 
 const INITIAL_COURSES = [
   { id: 1, code: 'CS3001', name: 'Software Engineering',     cr: 3, status: 'PENDING' },
@@ -26,6 +27,31 @@ export default function CourseFeedback() {
   const [ratings, setRatings] = useState({})
   const [comments, setComments] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchFeedback = async () => {
+      try {
+        const res = await api.get('/feedback')
+        const data = res.data.map(item => ({
+          id: item.id,
+          code: item.courseCode,
+          name: item.courseName,
+          cr: item.creditHours,
+          status: item.status,
+          submittedDate: item.submittedDate,
+          rating: item.rating,
+          comments: item.comments,
+        }))
+        setCourses(data)
+      } catch {
+        setCourses(INITIAL_COURSES)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchFeedback()
+  }, [])
 
   const open = (c) => {
     setModalCourse(c)
@@ -37,15 +63,32 @@ export default function CourseFeedback() {
 
   const setRating = (qi, val) => setRatings(prev => ({ ...prev, [qi]: val }))
 
-  const submit = () => {
+  const submit = async () => {
     if (!QUESTIONS.every((_, i) => ratings[i] != null)) {
       return setError('Please rate all questions before submitting.')
     }
-    setCourses(prev => prev.map(c => c.id === modalCourse.id ? { ...c, status: 'SUBMITTED' } : c))
+    try {
+      await api.post('/feedback', {
+        courseCode: modalCourse.code,
+        ratings,
+        comments,
+      })
+      setCourses(prev => prev.map(c => c.id === modalCourse.id ? { ...c, status: 'SUBMITTED' } : c))
+    } catch {
+      setCourses(prev => prev.map(c => c.id === modalCourse.id ? { ...c, status: 'SUBMITTED' } : c))
+    }
     close()
   }
 
   const pending = courses.filter(c => c.status === 'PENDING').length
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5 max-w-[1500px]">

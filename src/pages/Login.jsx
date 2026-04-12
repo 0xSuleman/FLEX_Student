@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import {
   Eye, EyeOff, Zap, ChevronRight, Mail, AlertTriangle, Check, Fingerprint,
   ArrowLeft, Send, X,
@@ -17,11 +18,13 @@ export default function Login() {
   const [verifying, setVerifying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState('')
+  const [loginLoading, setLoginLoading] = useState(false)
   const [forgotEmail, setForgotEmail] = useState('')
   const [forgotSent, setForgotSent] = useState(false)
   const [sending, setSending] = useState(false)
   const intervalRef = useRef(null)
   const navigate = useNavigate()
+  const { login } = useAuth()
 
   // Match the html/body bg to the login navy so scroll/overscroll never reveals
   // a white background. Restore on unmount so the dashboard stays light blue.
@@ -73,14 +76,24 @@ export default function Login() {
     setProgress(0)
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!verified) {
       setError('Please verify you are a human.')
       return
     }
     setError('')
-    navigate('/')
+    setLoginLoading(true)
+    try {
+      await login(rollNo, password)
+      navigate('/', { replace: true })
+    } catch (err) {
+      setError(
+        err.response?.data?.message || 'Invalid credentials. Please try again.'
+      )
+    } finally {
+      setLoginLoading(false)
+    }
   }
 
   const triggerFlip = (target) => {
@@ -301,11 +314,21 @@ export default function Login() {
 
               <button
                 type="submit"
-                className="w-full bg-bone text-ink border-2 border-ink rounded-md px-5 py-3 font-display text-xs uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all inline-flex items-center justify-center gap-2 group"
+                disabled={loginLoading}
+                className="w-full bg-bone text-ink border-2 border-ink rounded-md px-5 py-3 font-display text-xs uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all inline-flex items-center justify-center gap-2 group disabled:opacity-60"
               >
-                <Zap size={14} strokeWidth={3} />
-                EXECUTE LOGIN
-                <ChevronRight size={14} strokeWidth={3} className="group-hover:translate-x-0.5 transition-transform" />
+                {loginLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-ink border-t-transparent rounded-full animate-spin" />
+                    AUTHENTICATING...
+                  </>
+                ) : (
+                  <>
+                    <Zap size={14} strokeWidth={3} />
+                    EXECUTE LOGIN
+                    <ChevronRight size={14} strokeWidth={3} className="group-hover:translate-x-0.5 transition-transform" />
+                  </>
+                )}
               </button>
             </form>
 

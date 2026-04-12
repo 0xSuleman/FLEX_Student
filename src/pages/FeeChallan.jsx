@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Download, CreditCard, Info } from 'lucide-react'
+import api from '../services/api'
 
 const SEMESTERS = ['Spring 2026', 'Fall 2025', 'Spring 2025']
 const FEE_TYPES = ['Tuition Fee', 'Hostel Fee', 'Exam Fee', 'Other']
@@ -13,23 +14,72 @@ const INITIAL_CHALLANS = [
 ]
 
 export default function FeeChallan() {
-  const [challans, setChallans] = useState(INITIAL_CHALLANS)
+  const [challans, setChallans] = useState([])
+  const [loading, setLoading] = useState(true)
   const [genSem, setGenSem] = useState(SEMESTERS[0])
   const [genType, setGenType] = useState(FEE_TYPES[0])
 
-  const handleGenerate = () => {
-    const newChallan = {
-      id: Date.now(),
-      no: `CHN-2026-${String(challans.length + 1).padStart(3, '0')}`,
-      semester: genSem,
-      amount: FEE_AMOUNTS[genType],
-      due: '2026-02-15',
-      status: 'UNPAID',
+  useEffect(() => {
+    const fetchChallans = async () => {
+      try {
+        const res = await api.get('/fees/challans')
+        const mapped = res.data.map(c => ({
+          id: c.id,
+          no: c.challanNo,
+          semester: c.semester,
+          amount: c.amount,
+          due: c.dueDate,
+          status: c.status,
+          generatedDate: c.generatedDate,
+          paidDate: c.paidDate,
+        }))
+        setChallans(mapped)
+      } catch {
+        setChallans(INITIAL_CHALLANS)
+      } finally {
+        setLoading(false)
+      }
     }
-    setChallans(prev => [newChallan, ...prev])
+    fetchChallans()
+  }, [])
+
+  const handleGenerate = async () => {
+    try {
+      const res = await api.post('/fees/challans', { semester: genSem, type: genType })
+      const c = res.data
+      const newChallan = {
+        id: c.id,
+        no: c.challanNo,
+        semester: c.semester,
+        amount: c.amount,
+        due: c.dueDate,
+        status: c.status,
+        generatedDate: c.generatedDate,
+        paidDate: c.paidDate,
+      }
+      setChallans(prev => [newChallan, ...prev])
+    } catch {
+      const newChallan = {
+        id: Date.now(),
+        no: `CHN-2026-${String(challans.length + 1).padStart(3, '0')}`,
+        semester: genSem,
+        amount: FEE_AMOUNTS[genType],
+        due: '2026-02-15',
+        status: 'UNPAID',
+      }
+      setChallans(prev => [newChallan, ...prev])
+    }
   }
 
   const handleDownload = (no) => alert(`Downloading challan ${no}...`)
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5 max-w-[1500px]">
@@ -63,7 +113,7 @@ export default function FeeChallan() {
 
       {/* PAYMENT INFO */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="chunky-card p-5 cascade-in" style={{ animationDelay: '0.1s' }}>
+        <div className="chunky-card p-5 bg-mustard/20 cascade-in" style={{ animationDelay: '0.1s' }}>
           <div className="flex items-center gap-2 mb-3">
             <CreditCard size={16} className="text-rust" strokeWidth={2.5} />
             <h3 className="font-display text-[10px] text-ink uppercase">KuickPay</h3>
@@ -76,7 +126,7 @@ export default function FeeChallan() {
             <li>Keep the receipt for your records.</li>
           </ol>
         </div>
-        <div className="chunky-card p-5 cascade-in" style={{ animationDelay: '0.15s' }}>
+        <div className="chunky-card p-5 bg-mustard/20 cascade-in" style={{ animationDelay: '0.15s' }}>
           <div className="flex items-center gap-2 mb-3">
             <Info size={16} className="text-moss" strokeWidth={2.5} />
             <h3 className="font-display text-[10px] text-ink uppercase">Faysal Bank</h3>

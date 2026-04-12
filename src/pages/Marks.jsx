@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronDown, ChevronUp, Award } from 'lucide-react'
+import api from '../services/api'
 
 const SEMESTERS = ['Spring 2026', 'Fall 2025']
 
@@ -87,7 +88,41 @@ export default function Marks() {
   const [semester, setSemester] = useState('Spring 2026')
   const [activeTab, setActiveTab] = useState(0)
   const [collapsed, setCollapsed] = useState({})
-  const courses = DATA[semester] || []
+  const [apiData, setApiData] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchMarks = async () => {
+      setLoading(true)
+      try {
+        const res = await api.get(`/marks?semester=${encodeURIComponent(semester)}`)
+        const arr = Array.isArray(res.data) ? res.data : []
+        setApiData(arr.map(c => ({
+          code: c.courseCode,
+          name: c.courseName,
+          evals: (c.evaluations || []).map(e => ({
+            type: e.evaluationType,
+            name: e.evaluationName,
+            w: e.weightage,
+            obtained: e.obtained,
+            total: e.total,
+            avg: e.average,
+            std: e.stdDev,
+            min: e.min,
+            max: e.max,
+          })),
+        })))
+      } catch {
+        setApiData(null)
+      } finally {
+        setLoading(false)
+        setActiveTab(0)
+      }
+    }
+    fetchMarks()
+  }, [semester])
+
+  const courses = apiData || (DATA[semester] || [])
   const course = courses[activeTab]
   const groups = course ? groupEvals(course.evals) : []
   const grandTotal = course ? computeGrandTotal(course.evals) : null
@@ -113,7 +148,11 @@ export default function Marks() {
         </select>
       </div>
 
-      {courses.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center h-32">
+          <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+        </div>
+      ) : courses.length === 0 ? (
         <div className="chunky-card p-12 text-center cascade-in">
           <Award size={40} className="text-tan mx-auto mb-3" strokeWidth={1.5} />
           <p className="text-cocoa font-bold">No marks for {semester}.</p>

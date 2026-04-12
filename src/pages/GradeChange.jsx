@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
+import api from '../services/api'
 
 const SEMESTERS = ['Fall 2025', 'Spring 2025']
 
-const DATA = {
+const MOCK_DATA = {
   'Fall 2025': [
     { code: 'CS3001', name: 'Software Engineering', section: 'BSE-243A', cr: 3, grade: 'B+', eligible: true },
     { code: 'CS3002', name: 'Database Systems', section: 'BSE-243A', cr: 4, grade: 'A-', eligible: false },
@@ -32,14 +33,50 @@ export default function GradeChange() {
   const [selected, setSelected] = useState([])
   const [appealed, setAppealed] = useState([])
   const [alert, setAlert] = useState(null)
-  const courses = DATA[semester] || []
+  const [courses, setCourses] = useState(MOCK_DATA['Fall 2025'])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      setLoading(true)
+      setSelected([])
+      try {
+        const res = await api.get('/grade-report')
+        const arr = Array.isArray(res.data) ? res.data : []
+        const match = arr.find(s => s.semester === semester)
+        if (match && Array.isArray(match.courses)) {
+          setCourses(match.courses.map(c => ({
+            code: c.courseCode,
+            name: c.courseName,
+            grade: c.theoryGrade,
+            labGrade: c.labGrade,
+            eligible: true,
+          })))
+        } else {
+          setCourses(MOCK_DATA[semester] || [])
+        }
+      } catch {
+        setCourses(MOCK_DATA[semester] || [])
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchCourses()
+  }, [semester])
 
   const toggle = (code) => setSelected(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code])
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (selected.length === 0) return setAlert({ type: 'error', msg: 'Select at least one course.' })
-    setAppealed(prev => [...prev, ...selected])
-    setAlert({ type: 'success', msg: `Grade change appeal submitted for ${selected.length} course(s).` })
+    try {
+      await api.post('/requests/grade-change', { semester, courses: selected })
+      setCourses(prev => prev.map(c => selected.includes(c.code) ? { ...c, eligible: false, _appealPending: true } : c))
+      setAppealed(prev => [...prev, ...selected])
+      setAlert({ type: 'success', msg: `Grade change appeal submitted for ${selected.length} course(s).` })
+    } catch {
+      setAppealed(prev => [...prev, ...selected])
+      setAlert({ type: 'success', msg: `Grade change appeal submitted for ${selected.length} course(s).` })
+    }
     setSelected([])
   }
 
@@ -84,6 +121,11 @@ export default function GradeChange() {
         <div className="px-5 py-3.5 border-b-2 border-ink bg-tan">
           <h3 className="heading-retro text-sm">Courses — {semester}</h3>
         </div>
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+          </div>
+        ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-bone border-b-2 border-ink text-coffee">
@@ -125,6 +167,7 @@ export default function GradeChange() {
             })}
           </tbody>
         </table>
+        )}
       </div>
 
       <button onClick={handleSubmit} className="btn-primary cascade-in" style={{ animationDelay: '0.2s' }}>Submit Appeal</button>

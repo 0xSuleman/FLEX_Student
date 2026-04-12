@@ -1,4 +1,7 @@
-const PLAN = [
+import { useState, useEffect } from 'react'
+import api from '../services/api'
+
+const MOCK_PLAN = [
   { sem: 1, courses: [
     { code: 'CS1001', name: 'Introduction to Computing', cr: 3, type: 'CORE' },
     { code: 'CS1002', name: 'Programming Fundamentals', cr: 4, type: 'CORE' },
@@ -58,6 +61,39 @@ const PLAN = [
 ]
 
 export default function StudyPlan() {
+  const [plan, setPlan] = useState(MOCK_PLAN)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const res = await api.get('/study-plan')
+        const mapped = res.data.map((s) => ({
+          sem: s.semester,
+          courses: s.courses.map((c) => ({
+            code: c.courseCode,
+            name: c.courseName,
+            cr: c.creditHours,
+            type: c.type,
+          })),
+        }))
+        setPlan(mapped)
+      } catch {
+        setPlan(MOCK_PLAN)
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5 max-w-[1500px]">
       <div className="cascade-in">
@@ -73,7 +109,7 @@ export default function StudyPlan() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {PLAN.map((sem, si) => {
+        {plan.map((sem, si) => {
           const total = sem.courses.reduce((s, c) => s + c.cr, 0)
           return (
             <div key={sem.sem} className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: `${0.1 + si * 0.04}s` }}>

@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Layout from './components/Layout'
+import ProtectedRoute from './components/ProtectedRoute'
 import Dashboard from './pages/Dashboard'
 import Attendance from './pages/Attendance'
 import Marks from './pages/Marks'
@@ -20,7 +21,13 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route element={<Layout />}>
+      <Route
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
         <Route path="/" element={<Dashboard />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/marks" element={<Marks />} />

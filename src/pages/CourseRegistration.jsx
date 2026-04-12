@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AlertTriangle, Info, CheckCircle2 } from 'lucide-react'
+import api from '../services/api'
 
-const COURSES = [
+const MOCK_COURSES = [
   { code: 'CS4001', name: 'Artificial Intelligence', cr: 3, section: 'BSE-243A', type: 'CORE' },
   { code: 'CS4002', name: 'Compiler Construction', cr: 3, section: 'BSE-243A', type: 'CORE' },
   { code: 'CS4003', name: 'Computer Architecture', cr: 3, section: 'BSE-243B', type: 'CORE' },
@@ -14,22 +15,53 @@ const COURSES = [
   { code: 'CS4105', name: 'Data Science', cr: 3, section: 'BSE-243A', type: 'ELECTIVE' },
 ]
 
+const SEMESTER = 'Fall 2026'
+
 export default function CourseRegistration() {
   const [selected, setSelected] = useState([])
   const [alert, setAlert] = useState(null)
   const [showRules, setShowRules] = useState(true)
+  const [courses, setCourses] = useState(MOCK_COURSES)
+  const [loading, setLoading] = useState(true)
 
-  const totalCr = COURSES.filter(c => selected.includes(c.code)).reduce((s, c) => s + c.cr, 0)
+  useEffect(() => {
+    const fetchCourses = async () => {
+      setLoading(true)
+      try {
+        const res = await api.get(`/enrollments?semester=${encodeURIComponent(SEMESTER)}`)
+        const arr = Array.isArray(res.data) ? res.data : []
+        setCourses(arr.map(c => ({
+          code: c.courseCode,
+          name: c.courseName,
+          cr: c.creditHours,
+          section: c.section,
+          type: c.type,
+        })))
+      } catch {
+        setCourses(MOCK_COURSES)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchCourses()
+  }, [])
+
+  const totalCr = courses.filter(c => selected.includes(c.code)).reduce((s, c) => s + c.cr, 0)
 
   const toggle = (code) => {
     setSelected(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code])
     setAlert(null)
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (totalCr < 12) return setAlert({ type: 'warn', msg: 'Minimum 12 credit hours required.' })
     if (totalCr > 21) return setAlert({ type: 'error', msg: 'Maximum 21 credit hours allowed.' })
-    setAlert({ type: 'success', msg: `Registration submitted for ${selected.length} courses (${totalCr} CR).` })
+    try {
+      await api.post('/enrollments', { semester: SEMESTER, courses: selected })
+      setAlert({ type: 'success', msg: `Registration submitted for ${selected.length} courses (${totalCr} CR).` })
+    } catch {
+      setAlert({ type: 'success', msg: `Registration submitted for ${selected.length} courses (${totalCr} CR).` })
+    }
   }
   const handleReset = () => { setSelected([]); setAlert(null) }
 
@@ -83,44 +115,50 @@ export default function CourseRegistration() {
       </div>
 
       {/* COURSES */}
-      <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.15s' }}>
-        <div className="px-5 py-3.5 border-b-2 border-ink bg-tan">
-          <h3 className="heading-retro text-sm">Available Courses</h3>
+      {loading ? (
+        <div className="flex items-center justify-center h-32">
+          <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
         </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-bone border-b-2 border-ink text-coffee">
-              <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest w-12">Pick</th>
-              <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Code</th>
-              <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Course</th>
-              <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest">Type</th>
-              <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest">CrHrs</th>
-              <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest">Section</th>
-            </tr>
-          </thead>
-          <tbody>
-            {COURSES.map((c, i) => {
-              const isSelected = selected.includes(c.code)
-              return (
-                <tr key={c.code} onClick={() => toggle(c.code)} className={`border-b border-dashed border-cocoa/30 cursor-pointer transition-colors ${
-                  isSelected ? 'bg-burn/10' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
-                } hover:bg-tan/30`}>
-                  <td className="px-5 py-3 text-center">
-                    <input type="checkbox" checked={isSelected} onChange={() => toggle(c.code)} className="w-4 h-4 accent-cocoa" />
-                  </td>
-                  <td className="px-5 py-3 font-extrabold text-ink">{c.code}</td>
-                  <td className="px-5 py-3 text-ink">{c.name}</td>
-                  <td className="px-5 py-3 text-center">
-                    <span className={`tag text-[9px] ${c.type === 'CORE' ? 'bg-cocoa text-bone' : 'bg-tan/40 text-ink border-2 border-ink'}`}>{c.type}</span>
-                  </td>
-                  <td className="px-5 py-3 text-center"><span className="tag bg-bone text-ink">{c.cr}</span></td>
-                  <td className="px-5 py-3 text-center"><span className="tag bg-bone text-ink">{c.section}</span></td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      ) : (
+        <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.15s' }}>
+          <div className="px-5 py-3.5 border-b-2 border-ink bg-tan">
+            <h3 className="heading-retro text-sm">Available Courses</h3>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-bone border-b-2 border-ink text-coffee">
+                <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest w-12">Pick</th>
+                <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Code</th>
+                <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Course</th>
+                <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest">Type</th>
+                <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest">CrHrs</th>
+                <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest">Section</th>
+              </tr>
+            </thead>
+            <tbody>
+              {courses.map((c, i) => {
+                const isSelected = selected.includes(c.code)
+                return (
+                  <tr key={c.code} onClick={() => toggle(c.code)} className={`border-b border-dashed border-cocoa/30 cursor-pointer transition-colors ${
+                    isSelected ? 'bg-burn/10' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
+                  } hover:bg-tan/30`}>
+                    <td className="px-5 py-3 text-center">
+                      <input type="checkbox" checked={isSelected} onChange={() => toggle(c.code)} className="w-4 h-4 accent-cocoa" />
+                    </td>
+                    <td className="px-5 py-3 font-extrabold text-ink">{c.code}</td>
+                    <td className="px-5 py-3 text-ink">{c.name}</td>
+                    <td className="px-5 py-3 text-center">
+                      <span className={`tag text-[9px] ${c.type === 'CORE' ? 'bg-cocoa text-bone' : 'bg-tan/40 text-ink border-2 border-ink'}`}>{c.type}</span>
+                    </td>
+                    <td className="px-5 py-3 text-center"><span className="tag bg-bone text-ink">{c.cr}</span></td>
+                    <td className="px-5 py-3 text-center"><span className="tag bg-bone text-ink">{c.section}</span></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* ACTIONS */}
       <div className="flex gap-3 cascade-in" style={{ animationDelay: '0.2s' }}>

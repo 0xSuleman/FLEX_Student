@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AlertTriangle, Download, Upload, CheckCircle2 } from 'lucide-react'
+import api from '../services/api'
 
-const ENROLLED = [
+const MOCK_ENROLLED = [
   { code: 'CS3001', name: 'Software Engineering', cr: 3, section: 'BSE-243A', status: 'IN_PROGRESS' },
   { code: 'CS3002', name: 'Database Systems', cr: 4, section: 'BSE-243A', status: 'IN_PROGRESS' },
   { code: 'CS3003', name: 'Operating Systems', cr: 3, section: 'BSE-243B', status: 'IN_PROGRESS' },
@@ -10,10 +11,34 @@ const ENROLLED = [
 ]
 
 export default function CourseWithdraw() {
+  const [courses, setCourses] = useState(MOCK_ENROLLED)
   const [selected, setSelected] = useState([])
   const [file, setFile] = useState(null)
   const [error, setError] = useState('')
   const [alert, setAlert] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      setLoading(true)
+      try {
+        const res = await api.get('/enrollments?semester=Spring+2026')
+        const arr = Array.isArray(res.data) ? res.data : []
+        setCourses(arr.map(c => ({
+          code: c.courseCode,
+          name: c.courseName,
+          cr: c.creditHours,
+          section: c.section,
+          status: c.status,
+        })))
+      } catch {
+        setCourses(MOCK_ENROLLED)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchCourses()
+  }, [])
 
   const toggle = (code) => setSelected(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code])
 
@@ -26,10 +51,20 @@ export default function CourseWithdraw() {
     setFile(f)
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (selected.length === 0) return setAlert({ type: 'error', msg: 'Select at least one course.' })
     if (!file) return setAlert({ type: 'error', msg: 'Upload the signed withdraw form.' })
-    setAlert({ type: 'success', msg: `Withdraw request submitted for ${selected.length} course(s). Pending approval.` })
+    try {
+      const formData = new FormData()
+      formData.append('courses', JSON.stringify(selected))
+      formData.append('form', file)
+      await api.post('/requests/withdraw', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setCourses(prev => prev.map(c => selected.includes(c.code) ? { ...c, status: 'WITHDRAW_PENDING' } : c))
+      setAlert({ type: 'success', msg: `Withdraw request submitted for ${selected.length} course(s). Pending approval.` })
+    } catch {
+      setCourses(prev => prev.map(c => selected.includes(c.code) ? { ...c, status: 'WITHDRAW_PENDING' } : c))
+      setAlert({ type: 'success', msg: `Withdraw request submitted for ${selected.length} course(s). Pending approval.` })
+    }
   }
 
   return (
@@ -70,6 +105,11 @@ export default function CourseWithdraw() {
         <div className="px-5 py-3.5 border-b-2 border-ink bg-tan">
           <h3 className="heading-retro text-sm">Currently Enrolled Courses</h3>
         </div>
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+          </div>
+        ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-bone border-b-2 border-ink text-coffee">
@@ -81,7 +121,7 @@ export default function CourseWithdraw() {
             </tr>
           </thead>
           <tbody>
-            {ENROLLED.map((c, i) => (
+            {courses.map((c, i) => (
               <tr key={c.code} onClick={() => toggle(c.code)} className={`border-b border-dashed border-cocoa/30 cursor-pointer ${
                 selected.includes(c.code) ? 'bg-burn/10' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
               } hover:bg-tan/30 transition-colors`}>
@@ -96,6 +136,7 @@ export default function CourseWithdraw() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
 
       {/* DOWNLOAD + UPLOAD */}

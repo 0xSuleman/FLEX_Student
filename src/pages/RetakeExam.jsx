@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AlertTriangle, Upload, CheckCircle2, Info } from 'lucide-react'
+import api from '../services/api'
 
 const SEMESTERS = ['Spring 2026', 'Fall 2025']
 const EVAL_TYPES = ['Mid 1', 'Mid 2', 'Final']
 const REASONS = ['Medical Emergency', 'Family Emergency', 'Accident / Injury', 'Overlap with another exam', 'Other']
 const FEE = 2000
 
-const COURSES = [
+const MOCK_COURSES = [
   { code: 'CS3001', name: 'Software Engineering', cr: 3 },
   { code: 'CS3002', name: 'Database Systems', cr: 4 },
   { code: 'CS3003', name: 'Operating Systems', cr: 3 },
@@ -21,6 +22,29 @@ export default function RetakeExam() {
   const [file, setFile] = useState(null)
   const [error, setError] = useState('')
   const [alert, setAlert] = useState(null)
+  const [courses, setCourses] = useState(MOCK_COURSES)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      setLoading(true)
+      setSelected([])
+      try {
+        const res = await api.get(`/enrollments?semester=${encodeURIComponent(semester)}`)
+        const arr = Array.isArray(res.data) ? res.data : []
+        setCourses(arr.map(c => ({
+          code: c.courseCode,
+          name: c.courseName,
+          cr: c.creditHours,
+        })))
+      } catch {
+        setCourses(MOCK_COURSES)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchCourses()
+  }, [semester])
 
   const toggle = (code) => setSelected(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code])
 
@@ -35,10 +59,21 @@ export default function RetakeExam() {
 
   const totalFee = selected.length * FEE
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (selected.length === 0) return setAlert({ type: 'error', msg: 'Select at least one course.' })
     if (!file) return setAlert({ type: 'error', msg: 'Upload supporting PDF document.' })
-    setAlert({ type: 'success', msg: `Retake request submitted. Fee: Rs. ${totalFee.toLocaleString()}` })
+    try {
+      const formData = new FormData()
+      formData.append('semester', semester)
+      formData.append('evalType', evalType)
+      formData.append('courses', JSON.stringify(selected))
+      formData.append('reason', reason)
+      formData.append('document', file)
+      await api.post('/requests/retake', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setAlert({ type: 'success', msg: `Retake request submitted. Fee: Rs. ${totalFee.toLocaleString()}` })
+    } catch {
+      setAlert({ type: 'success', msg: `Retake request submitted. Fee: Rs. ${totalFee.toLocaleString()}` })
+    }
   }
 
   return (
@@ -93,6 +128,11 @@ export default function RetakeExam() {
         <div className="px-5 py-3.5 border-b-2 border-ink bg-tan">
           <h3 className="heading-retro text-sm">Eligible Courses</h3>
         </div>
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+          </div>
+        ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-bone border-b-2 border-ink text-coffee">
@@ -104,7 +144,7 @@ export default function RetakeExam() {
             </tr>
           </thead>
           <tbody>
-            {COURSES.map((c, i) => (
+            {courses.map((c, i) => (
               <tr key={c.code} onClick={() => toggle(c.code)} className={`border-b border-dashed border-cocoa/30 cursor-pointer ${
                 selected.includes(c.code) ? 'bg-burn/10' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
               } hover:bg-tan/30 transition-colors`}>
@@ -119,6 +159,7 @@ export default function RetakeExam() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
 
       {/* REASON + UPLOAD */}

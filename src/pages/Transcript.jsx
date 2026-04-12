@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Download, X, Info, AlertTriangle } from 'lucide-react'
+import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const SEMESTERS = [
   {
@@ -78,6 +80,56 @@ const gradeColor = (g) => {
 
 export default function Transcript() {
   const [modal, setModal] = useState(null)
+  const { user } = useAuth()
+  const [apiData, setApiData] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchTranscript = async () => {
+      try {
+        const res = await api.get('/transcript')
+        const d = res.data
+        setApiData({
+          student: {
+            name: d.studentName,
+            rollNo: d.rollNo,
+            degree: d.degree,
+            campus: d.campus,
+          },
+          semesters: (d.semesters || []).map(s => ({
+            name: s.semester,
+            crAttempted: s.crAttempted,
+            crEarned: s.crEarned,
+            sgpa: s.sgpa,
+            cgpa: s.cgpa,
+            courses: (s.courses || []).map(c => ({
+              code: c.courseCode,
+              name: c.courseName,
+              cr: c.creditHours,
+              grade: c.grade,
+              points: c.points,
+            })),
+          })),
+        })
+      } catch {
+        setApiData(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchTranscript()
+  }, [user])
+
+  const student = apiData?.student || STUDENT
+  const semesters = apiData?.semesters || SEMESTERS
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5 max-w-[1500px]">
@@ -99,7 +151,7 @@ export default function Transcript() {
 
       <div className="chunky-card p-5 cascade-in" style={{ animationDelay: '0.05s' }}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {Object.entries(STUDENT).map(([k, v]) => (
+          {Object.entries(student).map(([k, v]) => (
             <div key={k} className="bg-bone border-2 border-ink rounded p-2.5">
               <div className="text-[9px] font-extrabold text-coffee uppercase tracking-widest">{k.replace(/([A-Z])/g, ' $1').trim()}</div>
               <div className="font-extrabold text-sm text-ink mt-1">{v}</div>
@@ -108,7 +160,7 @@ export default function Transcript() {
         </div>
       </div>
 
-      {SEMESTERS.map((sem, si) => (
+      {semesters.map((sem, si) => (
         <div key={sem.name} className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: `${0.1 + si * 0.05}s` }}>
           <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between flex-wrap gap-2">
             <h3 className="heading-retro text-sm">{sem.name}</h3>

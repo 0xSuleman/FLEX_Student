@@ -1,4 +1,7 @@
-const SEMESTERS = [
+import { useState, useEffect } from 'react'
+import api from '../services/api'
+
+const MOCK_SEMESTERS = [
   {
     name: 'Fall 2024',
     courses: [
@@ -43,6 +46,39 @@ const gradeColor = (g) => {
 }
 
 export default function GradeReport() {
+  const [semesters, setSemesters] = useState(MOCK_SEMESTERS)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.get('/grade-report')
+      .then((res) => {
+        const mapped = res.data.map((item) => ({
+          name: item.semester,
+          courses: item.courses.map((c) => ({
+            code: c.courseCode,
+            name: c.courseName,
+            theory: c.theoryGrade,
+            lab: c.labGrade,
+          })),
+        }))
+        setSemesters(mapped)
+      })
+      .catch(() => {
+        setSemesters(MOCK_SEMESTERS)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5 max-w-[1500px]">
       <div className="cascade-in">
@@ -52,7 +88,7 @@ export default function GradeReport() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {SEMESTERS.map((sem, si) => (
+        {semesters.map((sem, si) => (
           <div key={sem.name} className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: `${0.05 + si * 0.05}s` }}>
             <div className="px-4 py-3 border-b-2 border-ink bg-tan">
               <h3 className="heading-retro text-sm">{sem.name}</h3>
