@@ -29,6 +29,22 @@ export default {
         mossL:  '#34D399',
         bad:    '#DC2626',
         badL:   '#EF4444',
+        // login brown palette (separate from dashboard navy)
+        brown: {
+          paper:   '#F9F2DE',
+          cream:   '#FFFAEA',
+          bone:    '#FAF3DD',
+          sand:    '#EADBB9',
+          tan:     '#D9B88A',
+          coffee:  '#6B3A1C',
+          cocoa:   '#4A2612',
+          ink:     '#2A1508',
+          burn:    '#D96E3A',
+          burnL:   '#E88B5E',
+          mustard: '#C9902B',
+          moss:    '#8A9B55',
+          mossL:   '#A5B86E',
+        },
       },
       boxShadow: {
         'pixel':    '4px 4px 0 0 #040E21',
