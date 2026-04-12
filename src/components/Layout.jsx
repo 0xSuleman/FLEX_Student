@@ -248,7 +248,7 @@ export default function Layout() {
               <span>·</span>
               <span>{STUDENT.campus}</span>
             </div>
-            <div>NUKED v1.0.90 · Press F1 for Help</div>
+            <div>NUKED v1.0.90</div>
           </div>
         </main>
       </div>

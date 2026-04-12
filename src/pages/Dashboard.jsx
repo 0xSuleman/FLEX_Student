@@ -272,10 +272,19 @@ export default function Dashboard() {
         <div className="flex items-start justify-between gap-6">
           <div>
             <div className="text-sm font-bold text-coffee uppercase tracking-wider">
-              Saturday · April 11, 2026
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).replace(',', ' ·')}
             </div>
             <h1 className="font-display text-2xl md:text-4xl text-ink leading-tight mt-3">
-              HELLO, {studentInfo.name.split(' ')[0].toUpperCase()}
+              HELLO,{' '}
+              {studentInfo.name.split(' ')[0].toUpperCase().split('').map((ch, i) => (
+                <span
+                  key={i}
+                  className="inline-block letter-wave"
+                  style={{ animationDelay: `${i * 0.07}s` }}
+                >
+                  {ch}
+                </span>
+              ))}
             </h1>
             <p className="text-sm text-cocoa mt-2">
               Spring 2026 · {enrolledCourses.length} courses · Aggregate attendance {aggAttendance}%.
