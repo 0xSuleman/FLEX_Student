@@ -554,7 +554,7 @@ export default function Dashboard() {
 function InfoBox({ label, value }) {
   return (
     <div className="bg-cream border-2 border-ink rounded-md p-3 hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-pixel-sm transition-all">
-      <div className="text-[9px] font-extrabold text-burn uppercase tracking-widest mb-1">{label}</div>
+      <div className="text-[9px] font-extrabold text-ink/60 uppercase tracking-widest mb-1">{label}</div>
       <div className="font-extrabold text-sm text-ink truncate">{value}</div>
     </div>
   )

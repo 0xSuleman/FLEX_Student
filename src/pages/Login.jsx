@@ -18,6 +18,7 @@ export default function Login() {
   const [verifying, setVerifying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState('')
+  const [remember, setRemember] = useState(false)
   const [loginLoading, setLoginLoading] = useState(false)
   const [forgotEmail, setForgotEmail] = useState('')
   const [forgotSent, setForgotSent] = useState(false)
@@ -85,7 +86,7 @@ export default function Login() {
     setError('')
     setLoginLoading(true)
     try {
-      await login(rollNo, password)
+      await login(rollNo, password, remember)
       navigate('/', { replace: true })
     } catch (err) {
       setError(
@@ -304,10 +305,10 @@ export default function Login() {
 
               <div className="flex items-center justify-between font-mono text-[11px] pt-1">
                 <label className="flex items-center gap-2 text-bone/70 cursor-pointer hover:text-bone transition-colors">
-                  <input type="checkbox" className="w-3.5 h-3.5 accent-burn" />
+                  <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="w-3.5 h-3.5 accent-mossL" />
                   REMEMBER_ME
                 </label>
-                <button type="button" onClick={goForgot} className="text-burn hover:text-bone transition-colors uppercase tracking-wider font-bold">
+                <button type="button" onClick={goForgot} className="text-bone hover:text-burn transition-colors uppercase tracking-wider font-bold">
                   [ FORGOT? ]
                 </button>
               </div>
@@ -406,7 +407,13 @@ function ForgotPanel({ email, setEmail, onSubmit, onBack, sending, sent }) {
         <>
           <div className="text-center mb-4 content-up" style={{ animationDelay: '0.2s' }}>
             <h2 className="font-display text-base md:text-lg text-bone leading-tight uppercase mb-2">
-              Forgotten<br />Password ?
+              {'FORGOTTEN'.split('').map((ch, i) => (
+                <span key={i} className="inline-block letter-wave" style={{ animationDelay: `${i * 0.05}s` }}>{ch}</span>
+              ))}
+              <br />
+              {'PASSWORD ?'.split('').map((ch, i) => (
+                <span key={i} className="inline-block letter-wave" style={{ animationDelay: `${(9 + i) * 0.05}s` }}>{ch === ' ' ? '\u00A0' : ch}</span>
+              ))}
             </h2>
             <div className="w-12 h-0.5 bg-burn mx-auto mb-3" />
           </div>

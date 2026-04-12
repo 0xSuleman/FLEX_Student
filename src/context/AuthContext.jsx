@@ -10,28 +10,33 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     try {
-      const storedToken = localStorage.getItem('flex_token')
-      const storedUser = localStorage.getItem('flex_user')
+      // Check both storages
+      const storedToken = localStorage.getItem('flex_token') || sessionStorage.getItem('flex_token')
+      const storedUser = localStorage.getItem('flex_user') || sessionStorage.getItem('flex_user')
       if (storedToken && storedUser && storedUser !== 'undefined') {
         setToken(storedToken)
         setUser(JSON.parse(storedUser))
       } else {
         localStorage.removeItem('flex_token')
         localStorage.removeItem('flex_user')
+        sessionStorage.removeItem('flex_token')
+        sessionStorage.removeItem('flex_user')
       }
     } catch {
       localStorage.removeItem('flex_token')
       localStorage.removeItem('flex_user')
+      sessionStorage.removeItem('flex_token')
+      sessionStorage.removeItem('flex_user')
     }
     setLoading(false)
   }, [])
 
-  const login = async (rollNo, password) => {
+  const login = async (rollNo, password, remember = false) => {
     const response = await api.post('/auth/login', {
       rollNumber: rollNo,
       password,
     })
-  
+
     const data = response.data
     const jwt = data.token
     const userData = {
@@ -41,9 +46,10 @@ export function AuthProvider({ children }) {
       degree: data.degree,
       campus: data.campus,
     }
-  
-    localStorage.setItem('flex_token', jwt)
-    localStorage.setItem('flex_user', JSON.stringify(userData))
+
+    const storage = remember ? localStorage : sessionStorage
+    storage.setItem('flex_token', jwt)
+    storage.setItem('flex_user', JSON.stringify(userData))
     setToken(jwt)
     setUser(userData)
     return data
@@ -52,6 +58,8 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem('flex_token')
     localStorage.removeItem('flex_user')
+    sessionStorage.removeItem('flex_token')
+    sessionStorage.removeItem('flex_user')
     setToken(null)
     setUser(null)
   }
