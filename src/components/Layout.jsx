@@ -187,7 +187,7 @@ export default function Layout() {
                 {showNotifs && (
                   <div className="absolute top-full right-0 mt-2 w-80 bg-cream border-2 border-ink rounded-lg shadow-pixel overflow-hidden z-50 cascade-in">
                     <div className="bg-cocoa text-bone px-4 py-2.5 border-b-2 border-ink flex items-center justify-between">
-                      <span className="font-display text-[9px] uppercase tracking-wider">Notifications</span>
+                      <span className="font-display text-[9px] uppercase tracking-wider">// Notifications</span>
                       {unreadCount > 0 && (
                         <button onClick={markAllRead} className="text-[9px] font-extrabold text-burn hover:text-bone uppercase tracking-wider">
                           Mark all read
@@ -276,8 +276,13 @@ function NavItem({ icon: Icon, label, to }) {
         }`
       }
     >
-      <Icon size={14} strokeWidth={2.8} />
-      <span>{label}</span>
+      {({ isActive }) => (
+        <>
+          <Icon size={14} strokeWidth={2.8} />
+          <span>{label}</span>
+          {isActive && <span className="ml-auto animate-blink">&lt;</span>}
+        </>
+      )}
     </NavLink>
   )
 }

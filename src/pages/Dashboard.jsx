@@ -132,7 +132,7 @@ export default function Dashboard() {
         {/* UNIVERSITY INFO */}
         <div className="chunky-card p-5 cascade-in" style={{ animationDelay: '0.03s' }}>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="heading-retro text-sm">University Info</h3>
+            <h3 className="heading-retro text-sm">// University Info</h3>
             <span className="tag bg-moss text-cream">{STUDENT.status}</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -150,7 +150,7 @@ export default function Dashboard() {
           <div className="col-span-12 sm:col-span-5 chunky-card chunky-card-hover p-5 relative overflow-hidden cascade-in" style={{ animationDelay: '0.1s' }}>
             <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-burn/10" />
             <div className="relative">
-              <div className="text-xs font-extrabold text-coffee uppercase tracking-widest">CGPA</div>
+              <div className="text-xs font-extrabold text-coffee uppercase tracking-widest">// CGPA</div>
               <div className="flex items-end gap-3 mt-2">
                 <div className="font-black text-6xl text-ink leading-none tabular-nums">{cgpaAnim.toFixed(2)}</div>
                 <div className="flex items-center gap-1 text-moss font-extrabold text-sm pb-2">
@@ -166,7 +166,7 @@ export default function Dashboard() {
           </div>
 
           <div className="col-span-6 sm:col-span-4 chunky-card chunky-card-hover p-5 cascade-in" style={{ animationDelay: '0.2s' }}>
-            <div className="text-xs font-extrabold text-coffee uppercase tracking-widest mb-3">Attendance</div>
+            <div className="text-xs font-extrabold text-coffee uppercase tracking-widest mb-3">// Attendance</div>
             <div className="flex items-center gap-4">
               <AttendanceBar pct={aggAttendance} />
               <div className="flex-1 space-y-1">
@@ -195,7 +195,7 @@ export default function Dashboard() {
           <div className="col-span-6 sm:col-span-3 chunky-card chunky-card-hover p-5 relative overflow-hidden cascade-in" style={{ animationDelay: '0.3s' }}>
             <div className="absolute -bottom-10 -right-10 w-32 h-32 rounded-full bg-burn/10" />
             <div className="relative">
-              <div className="text-xs font-extrabold text-coffee uppercase tracking-widest">Fee</div>
+              <div className="text-xs font-extrabold text-coffee uppercase tracking-widest">// Fee</div>
               <div className="text-[10px] text-cocoa/70 uppercase font-bold mt-2">Next Challan</div>
               <div className="font-black text-xl text-ink mt-0.5">Rs {(FEE.amount / 1000)}K</div>
               <div className="text-[11px] font-bold text-coffee mt-1">{FEE.challanNo}</div>
@@ -209,7 +209,7 @@ export default function Dashboard() {
 
         {/* QUICK ACTIONS */}
         <div className="cascade-in" style={{ animationDelay: '0.04s' }}>
-          <h2 className="heading-retro text-2xl mb-4">Quick Actions</h2>
+          <h2 className="heading-retro text-2xl mb-4">// Quick Actions</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <QuickAction icon={BookOpen}       label="Register"   sub="Courses"           onClick={() => navigate('/course-registration')} />
             <QuickAction icon={Wallet}         label="Pay Fee"    sub="Challan"           onClick={() => navigate('/fee-challan')} />
@@ -223,7 +223,7 @@ export default function Dashboard() {
         {/* ENROLLED COURSES */}
         <div className="chunky-card overflow-hidden">
           <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
-            <h3 className="heading-retro text-sm">Enrolled Courses — Spring 2026</h3>
+            <h3 className="heading-retro text-sm">// Enrolled Courses — Spring 2026</h3>
             <span className="text-xs font-bold text-ink uppercase tracking-wider">{ENROLLED.reduce((s, c) => s + c.cr, 0)} CR</span>
           </div>
           <table className="w-full text-sm">
@@ -245,7 +245,7 @@ export default function Dashboard() {
                   <td className="px-5 py-3 text-center"><span className="tag bg-bone text-ink">{c.section}</span></td>
                   <td className="px-5 py-3 text-center"><span className="tag bg-bone text-ink">{c.cr}</span></td>
                   <td className="px-5 py-3 text-center">
-                    <span className={`tag ${c.attendance >= 80 ? 'bg-moss text-cream' : 'bg-cocoa text-bone'}`}>{c.attendance}%</span>
+                    <span className={`tag ${c.attendance >= 80 ? 'bg-moss text-cream' : 'bg-bad text-bone'}`}>{c.attendance}%</span>
                   </td>
                   <td className="px-5 py-3 text-center"><span className={`tag ${gradeColor(c.latestGrade)}`}>{c.latestGrade}</span></td>
                 </tr>
@@ -257,7 +257,7 @@ export default function Dashboard() {
         {/* RECENT MARKS */}
         <div className="chunky-card overflow-hidden">
           <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
-            <h3 className="heading-retro text-sm">Recent Evaluations</h3>
+            <h3 className="heading-retro text-sm">// Recent Evaluations</h3>
             <span className="text-xs font-bold text-ink uppercase tracking-wider">Latest 4</span>
           </div>
           <table className="w-full text-sm">
@@ -298,7 +298,7 @@ export default function Dashboard() {
         {/* ACADEMIC CALENDAR */}
         <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.1s' }}>
           <div className="flex items-center justify-between px-4 py-3 border-b-2 border-ink bg-cocoa text-bone">
-            <span className="font-black text-xs uppercase tracking-widest">Academic Calendar</span>
+            <span className="font-black text-xs uppercase tracking-widest">// Academic Calendar</span>
             <Calendar size={14} />
           </div>
           <div className="p-4 space-y-2.5">
@@ -321,7 +321,7 @@ export default function Dashboard() {
         {/* PERSONAL INFORMATION */}
         <div className="chunky-card p-5 cascade-in" style={{ animationDelay: '0.18s' }}>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="heading-retro text-sm">Personal Information</h3>
+            <h3 className="heading-retro text-sm">// Personal Information</h3>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <InfoBox label="Name" value={PERSONAL.name} />
@@ -474,8 +474,9 @@ function DashboardCalendar() {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
   const [month, setMonth] = useState(4)
   const year = 2026
-  const todayMonth = 4
-  const todayDay = 11
+  const pkNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Karachi' }))
+  const todayMonth = pkNow.getMonth() + 1
+  const todayDay = pkNow.getDate()
   const eventsByMonth = { 1: [14, 19, 26], 2: [16, 18, 20], 4: [14, 16, 18, 22], 5: [4, 6, 8] }
   const events = eventsByMonth[month] || []
 
