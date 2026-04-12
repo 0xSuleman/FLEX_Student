@@ -1,24 +1,4 @@
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.env
-frontend/.env.local
-
-# Backend
-backend/target/
-backend/.mvn/wrapper/maven-wrapper.jar
-*.class
-*.jar
-*.war
-
-# IDE
-.idea/
-*.iml
-.vscode/settings.json
-
-# OS
+node_modules/
 .DS_Store
-Thumbs.db
-
-# Secrets — never commit real credentials
-backend/src/main/resources/application-local.properties
+dist/
+.env
