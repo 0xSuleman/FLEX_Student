@@ -1,0 +1,63 @@
+# NUKED Portal — full backend stack for the team.
+#
+# Usage:
+#   docker compose up --build       # first run (compiles backend, starts DB)
+#   docker compose up               # subsequent runs
+#   docker compose down             # stop containers (data persists in volume)
+#   docker compose down -v          # stop AND wipe DB (fresh seed on next up)
+#
+# Frontend stays local: `cd <repo> && npm run dev` (Vite at :5173). The
+# CORS allowlist in the backend already includes http://localhost:5173.
+#
+# DB credentials below are *dev only* — do not deploy this file to prod.
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: nuked-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: nuked_root
+      MYSQL_DATABASE: nuked_portal_db
+      MYSQL_USER: nuked
+      MYSQL_PASSWORD: nuked_pass
+    ports:
+      - "3307:3306"   # host 3307 to avoid clashing with a local MySQL on 3306
+    volumes:
+      - nuked_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pnuked_root"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [nuked-net]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nuked-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # Spring Boot relaxed binding — these env vars override application.properties
+      # without us having to touch the file (so local dev stays the same).
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/nuked_portal_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Karachi
+      SPRING_DATASOURCE_USERNAME: nuked
+      SPRING_DATASOURCE_PASSWORD: nuked_pass
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      JWT_SECRET: ${JWT_SECRET:-a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2}
+      JWT_EXPIRATION: 86400000
+      JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75"
+    ports:
+      - "8090:8080"   # host 8090 (lost-and-found project owns 8080)
+    networks: [nuked-net]
+
+volumes:
+  nuked_mysql_data:
+
+networks:
+  nuked-net:
+    driver: bridge

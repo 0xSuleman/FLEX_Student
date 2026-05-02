@@ -8,10 +8,13 @@ import api from '../../services/api'
 import { PageHeader, SectionCard, ActionButton, StatCard } from '../../components/PageShell'
 
 // ── Mode constants ──
-const IDLE   = 'idle'
-const VIEW   = 'view'
-const MANUAL = 'manual'
-const BLE    = 'ble'
+// EDIT replaces the old MANUAL flow — instead of typing topic/duration and
+// rebuilding from scratch, faculty picks a past closed session and edits its
+// P/A/L inline (per req 4.2.4).
+const IDLE = 'idle'
+const VIEW = 'view'
+const EDIT = 'edit'
+const BLE  = 'ble'
 
 const STATUS_TONE = {
   Present: 'bg-moss text-cream',
@@ -35,7 +38,6 @@ export default function FacultyAttendance() {
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [pastSessions, setPastSessions] = useState([])
   const [bleSupported, setBleSupported] = useState(false)
   // VIEW mode: real past sessions from backend + per-session expanded edit roster.
   const [viewSessions, setViewSessions] = useState([])
@@ -132,13 +134,18 @@ export default function FacultyAttendance() {
   }, [roster, search])
 
   // ── Mode initiations ──
-  const startManual = async () => {
+  const startEdit = async () => {
+    setMode(EDIT); setBleSession(null)
     if (!courseId) return
-    await loadRoster('Present', 'Manual')   // Everyone defaults to Present
-    setMode(MANUAL)
-    setBleSession(null)
-    setToast({ kind: 'info', text: 'Manual session — everyone is Present by default. Mark only the absent / late students, then Save.' })
-    clearToastSoon()
+    setViewLoading(true)
+    try {
+      const res = await api.get(`/faculty/sections/${courseId}/attendance/sessions`)
+      const arr = Array.isArray(res.data) ? res.data : []
+      setViewSessions(arr.filter(s => s.status === 'CLOSED'))
+    } catch (err) {
+      setToast({ kind: 'err', text: 'Failed to load past sessions.' })
+      setViewSessions([])
+    } finally { setViewLoading(false) }
   }
 
   const startBleMode = () => {
@@ -297,40 +304,6 @@ export default function FacultyAttendance() {
     }))
   }
 
-  const saveManual = async () => {
-    if (!course) return
-    if (!topic.trim()) {
-      setToast({ kind: 'err', text: 'Topic is required.' })
-      clearToastSoon()
-      return
-    }
-    setSaving(true)
-    try {
-      const open = await api.post('/faculty/attendance/sessions', {
-        facultySectionId: parseInt(courseId, 10),
-        topic,
-        durationMinutes: 5,
-      })
-      const sid = open.data.id
-      await api.post(`/faculty/attendance/sessions/${sid}/close`, {
-        marks: roster.map(r => ({
-          enrollmentId: r.enrollmentId,
-          presence: PRESENCE_CODE[r.status] || 'P',
-          method: 'Manual',
-        })),
-      })
-      pushPast({ id: sid, course, topic: topic || 'Manual entry', date: new Date().toISOString().slice(0,10), present: stats.present, absent: stats.absent, leave: stats.leave, total: stats.total, kind: 'Manual' })
-      setToast({ kind: 'ok', text: `Saved · ${stats.present} present / ${stats.absent} absent / ${stats.leave} leave` })
-      setMode(IDLE)
-      setTopic('')
-    } catch (err) {
-      setToast({ kind: 'err', text: 'Save failed: ' + (err.response?.data?.message || err.message) })
-    } finally {
-      setSaving(false)
-      clearToastSoon()
-    }
-  }
-
   const closeBleAndSave = async () => {
     if (!bleSession) return
     setSaving(true)
@@ -346,7 +319,6 @@ export default function FacultyAttendance() {
       const present = finalRoster.filter(r => r.status === 'Present').length
       const absent  = finalRoster.filter(r => r.status === 'Absent').length
       const leave   = finalRoster.filter(r => r.status === 'Leave').length
-      pushPast({ id: bleSession.id, course, topic, date: new Date().toISOString().slice(0,10), present, absent, leave, total: finalRoster.length, kind: 'BLE' })
       setToast({ kind: 'ok', text: `BLE session closed & saved · ${present} present / ${absent} absent` })
       setMode(IDLE)
       setBleSession(null)
@@ -359,7 +331,6 @@ export default function FacultyAttendance() {
     }
   }
 
-  const pushPast = (rec) => setPastSessions(prev => [{ ...rec, key: Date.now() }, ...prev])
   const clearToastSoon = () => setTimeout(() => setToast(null), 3500)
 
   const exportExcel = async () => {
@@ -427,9 +398,9 @@ export default function FacultyAttendance() {
 
         {mode === IDLE && (
           <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-3">
-            <ModeButton onClick={startView}      Icon={Eye}   title="View Attendance"   sub="Look at past sessions for this section. Read-only." />
-            <ModeButton onClick={startManual}    Icon={Hand}  title="Manual Attendance" sub="Everyone defaults to Present. Mark absent / late then Save." accent />
-            <ModeButton onClick={startBleMode}   Icon={Bluetooth} title="BLE Attendance" sub="Open a Bluetooth window so students can self-mark from their portal." />
+            <ModeButton onClick={startView}      Icon={Eye}       title="View Attendance" sub="Read-only history of past closed sessions." />
+            <ModeButton onClick={startEdit}      Icon={Hand}      title="Edit Attendance" sub="Pick a past session and update P/A/L for any student." accent />
+            <ModeButton onClick={startBleMode}   Icon={Bluetooth} title="BLE Attendance"  sub="Open a Bluetooth window so students can self-mark from their portal." />
           </div>
         )}
 
@@ -488,34 +459,21 @@ export default function FacultyAttendance() {
           </div>
         )}
 
-        {mode === MANUAL && (
-          <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-12 gap-4">
-            <Field className="md:col-span-9" label="Lecture Topic">
-              <input
-                value={topic} onChange={(e) => setTopic(e.target.value)}
-                placeholder="e.g. Iterative & Incremental Models"
-                className="w-full bg-bone border-2 border-ink rounded-md px-3 py-2 font-mono text-sm text-ink focus:outline-none"
-              />
-            </Field>
-            <div className="md:col-span-3 flex gap-2 items-end">
-              <ActionButton tone="bone" Icon={X} onClick={cancelMode}>Cancel</ActionButton>
-              <ActionButton tone="cocoa" Icon={Save} onClick={saveManual} disabled={saving || !topic.trim()}>
-                {saving ? 'Saving…' : 'Save'}
-              </ActionButton>
-            </div>
-            <div className="md:col-span-12 text-[11px] font-extrabold text-cocoa uppercase tracking-wider flex items-center gap-2">
-              <Hand size={12} strokeWidth={3} className="text-burn" />
-              Manual mode · default = Present · click P/A/L on a row to mark; click again to undo back to unmarked.
-            </div>
-          </div>
-        )}
-
         {mode === VIEW && (
           <div className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 text-xs font-extrabold text-cocoa uppercase tracking-wider">
               <Eye size={14} strokeWidth={3} className="text-burn" /> View only — read-only attendance history
             </div>
             <ActionButton tone="bone" Icon={X} onClick={() => setMode(IDLE)}>Back</ActionButton>
+          </div>
+        )}
+
+        {mode === EDIT && (
+          <div className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-xs font-extrabold text-cocoa uppercase tracking-wider">
+              <Hand size={14} strokeWidth={3} className="text-burn" /> Edit mode — click a session to update P/A/L (req 4.2.4 · date stays fixed per req 4.2.5)
+            </div>
+            <ActionButton tone="bone" Icon={X} onClick={() => { setMode(IDLE); setEditSessionId(null) }}>Back</ActionButton>
           </div>
         )}
       </div>
@@ -527,7 +485,7 @@ export default function FacultyAttendance() {
         </div>
       )}
 
-      {(mode === MANUAL || mode === BLE) && (
+      {mode === BLE && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <StatCard Icon={Users} label="Total" value={stats.total} tone="bg-cocoa text-bone" />
           <StatCard Icon={CheckCircle2} label="Present" value={stats.present} tone="bg-moss text-cream" />
@@ -537,7 +495,7 @@ export default function FacultyAttendance() {
         </div>
       )}
 
-      {(mode === MANUAL || mode === BLE) && (
+      {mode === BLE && (
         <SectionCard
           title={`Roster — ${course?.courseCode || ''} · ${course?.section || ''}`}
           right={
@@ -554,7 +512,6 @@ export default function FacultyAttendance() {
                 <Th>#</Th><Th>Roll</Th><Th>Name</Th>
                 <Th center>Status</Th>
                 <Th center>Method</Th>
-                {mode === MANUAL && <Th center>Mark</Th>}
               </tr>
             </thead>
             <tbody>
@@ -571,28 +528,21 @@ export default function FacultyAttendance() {
                   <td className="px-4 py-2.5 text-center">
                     <span className={`tag ${r.method === 'Bluetooth' ? 'bg-coffee text-bone' : r.method === 'Manual' ? 'bg-mustard text-ink' : r.method === 'Auto' ? 'bg-cocoa text-bone' : 'bg-bone text-cocoa'}`}>{r.method}</span>
                   </td>
-                  {mode === MANUAL && (
-                    <td className="px-4 py-2.5 text-center">
-                      <div className="inline-flex gap-1">
-                        <Btn label="P" active={r.status === 'Present'} tone="moss"    onClick={() => setStatus(r.roll, 'Present')} />
-                        <Btn label="A" active={r.status === 'Absent'}  tone="bad"     onClick={() => setStatus(r.roll, 'Absent')} />
-                        <Btn label="L" active={r.status === 'Leave'}   tone="mustard" onClick={() => setStatus(r.roll, 'Leave')} />
-                      </div>
-                    </td>
-                  )}
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={mode === MANUAL ? 6 : 5} className="px-5 py-8 text-center text-cocoa font-bold text-xs uppercase tracking-wider">No students.</td></tr>
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-cocoa font-bold text-xs uppercase tracking-wider">No students.</td></tr>
               )}
             </tbody>
           </table>
         </SectionCard>
       )}
 
-      {mode === VIEW && (
+      {(mode === VIEW || mode === EDIT) && (
         <SectionCard title={`Past Sessions — ${course?.courseCode || ''} · ${course?.section || ''}`}
-          right={<div className="text-[10px] font-extrabold text-cocoa uppercase tracking-widest">Click a row to edit P/A/L · req 4.2.4</div>}>
+          right={mode === EDIT
+            ? <div className="text-[10px] font-extrabold text-cocoa uppercase tracking-widest">Click any row to edit P/A/L · req 4.2.4</div>
+            : <div className="text-[10px] font-extrabold text-cocoa uppercase tracking-widest">Read-only history</div>}>
           {viewLoading ? (
             <div className="flex items-center justify-center h-32"><div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" /></div>
           ) : viewSessions.length === 0 ? (
@@ -603,15 +553,18 @@ export default function FacultyAttendance() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-bone border-b-2 border-ink text-coffee">
-                  <Th>#</Th><Th>Date</Th><Th>Topic</Th><Th center>Present / Total</Th><Th center>Edit</Th>
+                  <Th>#</Th><Th>Date</Th><Th>Topic</Th><Th center>Present / Total</Th>
                 </tr>
               </thead>
               <tbody>
                 {viewSessions.map((s, i) => {
-                  const open = editSessionId === s.sessionId
+                  const open = mode === EDIT && editSessionId === s.sessionId
+                  const clickable = mode === EDIT
                   return (
                     <>
-                      <tr key={s.sessionId} className={`border-b border-dashed border-cocoa/30 ${i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'}`}>
+                      <tr key={s.sessionId}
+                        onClick={clickable ? () => openEdit(s.sessionId) : undefined}
+                        className={`border-b border-dashed border-cocoa/30 ${i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'} ${clickable ? 'cursor-pointer hover:bg-tan/40' : ''} ${open ? 'bg-tan/60' : ''}`}>
                         <td className="px-4 py-2.5 font-extrabold text-ink">{s.lectureNo}</td>
                         <td className="px-4 py-2.5 text-cocoa font-mono text-xs">{s.date || '—'}</td>
                         <td className="px-4 py-2.5 text-ink">{s.topic || '—'}</td>
@@ -621,16 +574,10 @@ export default function FacultyAttendance() {
                           <span className="tag bg-mustard text-ink mr-1">{s.leave}</span>
                           <span className="tag bg-cocoa text-bone">/{s.total}</span>
                         </td>
-                        <td className="px-4 py-2.5 text-center">
-                          <button onClick={() => openEdit(s.sessionId)}
-                            className={`px-3 py-1 border-2 border-ink rounded font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all ${open ? 'bg-cocoa text-bone' : 'bg-bone text-ink'}`}>
-                            {open ? 'Close' : 'Edit'}
-                          </button>
-                        </td>
                       </tr>
                       {open && (
                         <tr className="bg-tan/40">
-                          <td colSpan={5} className="p-4">
+                          <td colSpan={4} className="p-4">
                             <div className="bg-bone border-2 border-ink rounded-md overflow-hidden">
                               <div className="px-4 py-2 bg-coffee text-bone flex items-center justify-between">
                                 <span className="font-display text-[10px] uppercase tracking-widest">Edit roster — Lecture {s.lectureNo} · {s.date}</span>
@@ -686,60 +633,15 @@ export default function FacultyAttendance() {
                 })}
               </tbody>
             </table>
-            <div className="px-5 py-3 border-t-2 border-dashed border-cocoa/30 text-[11px] font-bold text-cocoa uppercase tracking-wider">
-              &gt; Per req 4.2.4 you can update P/A/L for any past lecture in this semester. The session date stays fixed (req 4.2.5).
-            </div>
+            {mode === EDIT && (
+              <div className="px-5 py-3 border-t-2 border-dashed border-cocoa/30 text-[11px] font-bold text-cocoa uppercase tracking-wider">
+                &gt; Per req 4.2.4 you can update P/A/L for any past lecture in this semester. The session date stays fixed (req 4.2.5).
+              </div>
+            )}
           </>)}
         </SectionCard>
       )}
 
-      {/* Legacy in-memory past list — kept for the BLE / Manual save toasts only. */}
-      {false && mode === VIEW && (
-        <SectionCard title={`Past Sessions — ${course?.courseCode || ''} · ${course?.section || ''}`}>
-          {pastSessions.length === 0 ? (
-            <div className="px-5 py-10 text-center text-xs font-bold text-cocoa uppercase tracking-wider">
-              No saved sessions yet from this UI session. Past records are stored in the student-facing attendance log.
-            </div>
-          ) : (<>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-bone border-b-2 border-ink text-coffee">
-                  <Th>Date</Th><Th>Topic</Th><Th center>Kind</Th><Th center>P / A / L / Total</Th><Th center>Actions</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {pastSessions.map((s, i) => (
-                  <tr key={s.key} className={`border-b border-dashed border-cocoa/30 ${i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'}`}>
-                    <td className="px-5 py-3 text-ink">{s.date}</td>
-                    <td className="px-5 py-3 text-ink">{s.topic}</td>
-                    <td className="px-5 py-3 text-center"><span className={`tag ${s.kind === 'BLE' ? 'bg-coffee text-bone' : 'bg-mustard text-ink'}`}>{s.kind}</span></td>
-                    <td className="px-5 py-3 text-center">
-                      <span className="tag bg-moss text-cream mr-1">{s.present}</span>
-                      <span className="tag bg-bad text-bone mr-1">{s.absent}</span>
-                      <span className="tag bg-mustard text-ink mr-1">{s.leave}</span>
-                      <span className="tag bg-cocoa text-bone">/{s.total}</span>
-                    </td>
-                    <td className="px-5 py-3 text-center">
-                      <button
-                        onClick={() => {
-                          if (!confirm(`Delete this attendance record?\n\nFlex does not allow editing past-date records — you must delete and re-create.\n\nDate: ${s.date}\nTopic: ${s.topic || '(no topic)'}`)) return
-                          setPastSessions(prev => prev.filter(p => p.key !== s.key))
-                        }}
-                        className="bg-bad text-bone border-2 border-ink rounded px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="px-5 py-3 border-t-2 border-dashed border-cocoa/30 text-[11px] font-bold text-cocoa uppercase tracking-wider">
-              &gt; Past-date records cannot be edited. To correct one, delete it then take attendance again for that date via Manual mode.
-            </div>
-          </>)}
-        </SectionCard>
-      )}
     </div>
   )
 }
@@ -760,10 +662,10 @@ function ModeButton({ onClick, Icon, title, sub, accent }) {
 
 function ModeBadge({ mode, bleSupported }) {
   const map = {
-    [IDLE]:   { label: 'IDLE',   tone: 'bg-bone text-ink' },
-    [VIEW]:   { label: 'VIEW',   tone: 'bg-coffee text-bone' },
-    [MANUAL]: { label: 'MANUAL', tone: 'bg-mustard text-ink' },
-    [BLE]:    { label: 'BLE',    tone: 'bg-burn text-bone animate-blink' },
+    [IDLE]: { label: 'IDLE', tone: 'bg-bone text-ink' },
+    [VIEW]: { label: 'VIEW', tone: 'bg-coffee text-bone' },
+    [EDIT]: { label: 'EDIT', tone: 'bg-mustard text-ink' },
+    [BLE]:  { label: 'BLE',  tone: 'bg-burn text-bone animate-blink' },
   }
   const info = map[mode] || map[IDLE]
   return (
