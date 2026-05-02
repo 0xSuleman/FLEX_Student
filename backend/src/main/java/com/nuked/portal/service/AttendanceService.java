@@ -55,6 +55,7 @@ public class AttendanceService {
                 recordDTO.setDate(r.getDate() != null ? r.getDate().toString() : null);
                 recordDTO.setDurationHrs(r.getDurationHrs());
                 recordDTO.setPresence(r.getPresence());
+                recordDTO.setMethod(r.getMethod());
                 return recordDTO;
             }).collect(Collectors.toList());
             dto.setRecords(recordDTOs);

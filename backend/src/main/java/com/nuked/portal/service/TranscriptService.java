@@ -51,6 +51,10 @@ public class TranscriptService {
                 courseDTO.setCreditHours(enrollment.getCourse().getCreditHours());
                 courseDTO.setGrade(enrollment.getGrade());
                 courseDTO.setPoints(enrollment.getPoints());
+                courseDTO.setGradingScheme(enrollment.getCourse().getGradingScheme() != null
+                        ? enrollment.getCourse().getGradingScheme().name()
+                        : null);
+                courseDTO.setMca(enrollment.getMca());
                 return courseDTO;
             }).collect(Collectors.toList());
             semDTO.setCourses(courses);

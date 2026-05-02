@@ -27,7 +27,18 @@ public class SecurityConfig {
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/**").permitAll().anyRequest().authenticated())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/faculty/**").hasRole("FACULTY")
+                .requestMatchers("/api/hod/**").hasRole("HOD")
+                .requestMatchers("/api/ao/**").hasAnyRole("AO", "ASST_AO", "MANAGER", "ASST_MANAGER")
+                .requestMatchers("/api/exam/**").hasRole("EXAM_OFFICE")
+                .requestMatchers("/api/finance/**").hasRole("FINANCE")
+                .requestMatchers("/api/it/**").hasRole("IT_ADMIN")
+                .requestMatchers("/api/registrar/**").hasRole("REGISTRAR")
+                .requestMatchers("/api/admissions/**").hasRole("ADMISSIONS")
+                .requestMatchers("/api/cao/**").hasRole("CAO")
+                .anyRequest().authenticated())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
@@ -35,7 +46,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("http://localhost:*"));
+        config.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*"));
         config.setAllowedMethods(List.of("GET","POST","PUT","DELETE","PATCH","OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

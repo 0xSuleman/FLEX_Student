@@ -15,4 +15,6 @@ public class EnrollmentDTO {
     private Double points;
     private String remarks;
     private String status;
+    private String gradingScheme;
+    private Double mca;
 }

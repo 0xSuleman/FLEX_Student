@@ -16,6 +16,10 @@ public class Course {
         CORE, ELECTIVE
     }
 
+    public enum GradingScheme {
+        ABSOLUTE, RELATIVE
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -30,6 +34,10 @@ public class Course {
 
     @Enumerated(EnumType.STRING)
     private CourseType type;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private GradingScheme gradingScheme = GradingScheme.ABSOLUTE;
 
     private String semester;
 }

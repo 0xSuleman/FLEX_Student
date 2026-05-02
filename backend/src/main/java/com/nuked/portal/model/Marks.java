@@ -24,6 +24,14 @@ public class Marks {
     @JoinColumn(name = "enrollment_id")
     private Enrollment enrollment;
 
+    // Optional link to faculty-defined component. NULL for legacy seed rows.
+    // When non-null, the row's visibility is gated by the linked instrument's
+    // publish state (and final-category rows additionally by the HOD grade
+    // submission for the section).
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "component_id")
+    private MarksComponent component;
+
     @Enumerated(EnumType.STRING)
     private EvaluationType evaluationType;
 

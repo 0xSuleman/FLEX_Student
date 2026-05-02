@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface CourseWithdrawRequestRepository extends JpaRepository<CourseWithdrawRequest, Long> {
     List<CourseWithdrawRequest> findByEnrollmentStudentId(Long studentId);
+    List<CourseWithdrawRequest> findByStateOrderByRequestDateAsc(CourseWithdrawRequest.WithdrawState state);
+    List<CourseWithdrawRequest> findByStateInOrderByRequestDateAsc(java.util.Collection<CourseWithdrawRequest.WithdrawState> states);
 }

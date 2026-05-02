@@ -304,19 +304,19 @@ export default function Login() {
               )}
 
               <div className="flex items-center justify-between font-mono text-[11px] pt-1">
-                <label className="flex items-center gap-2 text-bone/70 cursor-pointer hover:text-bone transition-colors">
+                <label className="flex items-center gap-2 text-bone cursor-pointer hover:text-burn transition-colors">
                   <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="w-3.5 h-3.5 accent-mossL" />
-                  REMEMBER_ME
+                  Remember Me
                 </label>
-                <button type="button" onClick={goForgot} className="text-bone hover:text-burn transition-colors uppercase tracking-wider font-bold">
-                  [ FORGOT? ]
+                <button type="button" onClick={goForgot} className="text-bone hover:text-burn transition-colors font-normal">
+                  Forgot Password?
                 </button>
               </div>
 
               <button
                 type="submit"
                 disabled={loginLoading}
-                className="w-full bg-bone text-ink border-2 border-ink rounded-md px-5 py-3 font-display text-xs uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all inline-flex items-center justify-center gap-2 group disabled:opacity-60"
+                className="login-btn w-full relative overflow-hidden bg-bone text-ink border-2 border-ink rounded-md px-5 py-3 font-display text-xs uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all inline-flex items-center justify-center gap-2 group disabled:opacity-60"
               >
                 {loginLoading ? (
                   <>
@@ -325,9 +325,9 @@ export default function Login() {
                   </>
                 ) : (
                   <>
-                    <Zap size={14} strokeWidth={3} />
+                    <Zap size={14} strokeWidth={3} className="group-hover:rotate-12 transition-transform" />
                     EXECUTE LOGIN
-                    <ChevronRight size={14} strokeWidth={3} className="group-hover:translate-x-0.5 transition-transform" />
+                    <ChevronRight size={14} strokeWidth={3} className="group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </button>

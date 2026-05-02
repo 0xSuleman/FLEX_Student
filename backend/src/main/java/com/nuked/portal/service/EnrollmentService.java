@@ -71,6 +71,10 @@ public class EnrollmentService {
         dto.setPoints(enrollment.getPoints());
         dto.setRemarks(enrollment.getRemarks());
         dto.setStatus(enrollment.getStatus());
+        dto.setGradingScheme(enrollment.getCourse().getGradingScheme() != null
+                ? enrollment.getCourse().getGradingScheme().name()
+                : null);
+        dto.setMca(enrollment.getMca());
         return dto;
     }
 }

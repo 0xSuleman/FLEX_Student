@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Target, AlertTriangle, Info } from 'lucide-react'
 import api from '../services/api'
+import LiveAttendanceWidget from '../components/LiveAttendanceWidget'
 
 const SEMESTERS = ['Spring 2026', 'Fall 2025', 'Spring 2025']
 
@@ -107,6 +108,9 @@ export default function Attendance() {
         <h1 className="font-display text-2xl md:text-4xl text-ink leading-tight mt-3">ATTENDANCE</h1>
         <p className="text-sm text-cocoa mt-2">Track your lecture presence per course. Stay above 80% to remain eligible.</p>
       </div>
+
+      {/* LIVE BLE SESSIONS — only renders when faculty has opened a window for one of your enrolled courses */}
+      <LiveAttendanceWidget />
 
       {/* SEMESTER FILTER */}
       <div className="flex items-center gap-3 cascade-in" style={{ animationDelay: '0.05s' }}>

@@ -124,6 +124,8 @@ export default function Transcript() {
               cr: c.creditHours,
               grade: c.grade,
               points: c.points,
+              grading: c.gradingScheme ? c.gradingScheme.toLowerCase() : 'absolute',
+              mca: c.mca,
             })),
           })),
         }
@@ -150,6 +152,8 @@ export default function Transcript() {
                 cr: e.creditHours,
                 grade: 'I',
                 points: 0,
+                grading: e.gradingScheme ? e.gradingScheme.toLowerCase() : 'absolute',
+                mca: e.mca,
               })),
             }
             transcriptData.semesters = [...sorted, currentSem]

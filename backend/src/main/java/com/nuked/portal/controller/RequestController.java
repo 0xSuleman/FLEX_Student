@@ -93,6 +93,8 @@ public class RequestController {
                 CourseWithdrawRequest request = new CourseWithdrawRequest();
                 request.setEnrollment(enrollment);
                 request.setStatus(RetakeExamRequest.RequestStatus.PENDING);
+                // Per req 3.12.5: routed to faculty first, then HOD on approval.
+                request.setState(CourseWithdrawRequest.WithdrawState.PENDING_FACULTY);
                 request.setRequestDate(LocalDate.now());
 
                 if (form != null && !form.isEmpty()) {

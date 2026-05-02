@@ -37,5 +37,9 @@ public class RetakeExamRequest {
     @Enumerated(EnumType.STRING)
     private RequestStatus status;
 
+    @Column(length = 1000)
+    private String hodRemarks;
+
     private LocalDate requestDate;
+    private java.time.LocalDateTime decidedAt;
 }

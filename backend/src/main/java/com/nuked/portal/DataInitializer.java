@@ -4,6 +4,7 @@ import com.nuked.portal.model.*;
 import com.nuked.portal.repository.*;
 
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -11,6 +12,7 @@ import java.time.LocalDate;
 import java.util.*;
 
 @Component
+@Order(1)
 public class DataInitializer implements CommandLineRunner {
 
     private final StudentRepository studentRepository;
@@ -571,12 +573,18 @@ public class DataInitializer implements CommandLineRunner {
 
     private Course createCourse(String code, String name, int creditHours,
                                 Course.CourseType type, String semester) {
+        // CS-coded courses use absolute grading; non-CS (MT, HU, HS, EE)
+        // are graded on a relative curve.
+        Course.GradingScheme scheme = code.startsWith("CS")
+                ? Course.GradingScheme.ABSOLUTE
+                : Course.GradingScheme.RELATIVE;
         Course course = new Course();
         course.setCode(code);
         course.setName(name);
         course.setCreditHours(creditHours);
         course.setType(type);
         course.setSemester(semester);
+        course.setGradingScheme(scheme);
         return courseRepository.save(course);
     }
 
@@ -592,6 +600,10 @@ public class DataInitializer implements CommandLineRunner {
         enrollment.setPoints(points);
         enrollment.setRemarks(remarks);
         enrollment.setStatus(status);
+        if (course.getGradingScheme() == Course.GradingScheme.RELATIVE && grade != null) {
+            // Mean of Class Average — stable per-enrollment, 50–70 range.
+            enrollment.setMca(50.0 + rng.nextInt(21));
+        }
         return enrollmentRepository.save(enrollment);
     }
 

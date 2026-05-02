@@ -35,4 +35,6 @@ public class Enrollment {
     private String remarks;
 
     private String status;
+
+    private Double mca;
 }

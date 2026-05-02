@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface CourseFeedbackRepository extends JpaRepository<CourseFeedback, Long> {
     List<CourseFeedback> findByEnrollmentStudentId(Long studentId);
+    List<CourseFeedback> findByEnrollmentCourseIdAndEnrollmentSectionAndEnrollmentSemester(
+            Long courseId, String section, String semester);
 }

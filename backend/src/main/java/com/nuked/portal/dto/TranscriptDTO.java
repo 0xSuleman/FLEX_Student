@@ -29,5 +29,7 @@ public class TranscriptDTO {
         private Integer creditHours;
         private String grade;
         private Double points;
+        private String gradingScheme;
+        private Double mca;
     }
 }

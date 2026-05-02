@@ -1,0 +1,87 @@
+package com.nuked.portal.controller;
+
+import com.nuked.portal.dto.AttendanceSessionDTO;
+import com.nuked.portal.dto.CloseSessionRequest;
+import com.nuked.portal.dto.FacultySectionDTO;
+import com.nuked.portal.dto.OpenSessionRequest;
+import com.nuked.portal.dto.RosterEntryDTO;
+import com.nuked.portal.model.Faculty;
+import com.nuked.portal.service.AttendanceSessionService;
+import com.nuked.portal.service.FacultyService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/faculty")
+@RequiredArgsConstructor
+public class FacultyController {
+
+    private final FacultyService facultyService;
+    private final AttendanceSessionService sessionService;
+
+    @GetMapping("/me")
+    public ResponseEntity<Map<String, Object>> me(Authentication auth) {
+        Faculty f = facultyService.currentFaculty(auth.getName());
+        return ResponseEntity.ok(Map.of(
+                "username", f.getUsername(),
+                "name", f.getName(),
+                "designation", nullToDash(f.getDesignation()),
+                "department", nullToDash(f.getDepartment()),
+                "employeeId", nullToDash(f.getEmployeeId()),
+                "email", nullToDash(f.getEmail()),
+                "campus", nullToDash(f.getCampus())));
+    }
+
+    @GetMapping("/courses")
+    public ResponseEntity<List<FacultySectionDTO>> courses(Authentication auth,
+                                                           @RequestParam(required = false) String semester) {
+        return ResponseEntity.ok(facultyService.assignedSections(auth.getName(), semester));
+    }
+
+    @GetMapping("/sections/{sectionId}/roster")
+    public ResponseEntity<List<RosterEntryDTO>> roster(Authentication auth,
+                                                       @PathVariable Long sectionId) {
+        return ResponseEntity.ok(facultyService.roster(auth.getName(), sectionId));
+    }
+
+    @PostMapping("/attendance/sessions")
+    public ResponseEntity<AttendanceSessionDTO> openSession(Authentication auth,
+                                                            @Valid @RequestBody OpenSessionRequest req) {
+        return ResponseEntity.ok(sessionService.open(auth.getName(), req));
+    }
+
+    @GetMapping("/attendance/sessions/{id}")
+    public ResponseEntity<AttendanceSessionDTO> getSession(Authentication auth,
+                                                           @PathVariable Long id) {
+        return ResponseEntity.ok(sessionService.get(auth.getName(), id));
+    }
+
+    @GetMapping("/attendance/sessions/{id}/marks")
+    public ResponseEntity<List<com.nuked.portal.dto.SessionMarkDTO>> sessionMarks(
+            Authentication auth, @PathVariable Long id) {
+        return ResponseEntity.ok(sessionService.liveMarks(auth.getName(), id));
+    }
+
+    @PostMapping("/attendance/sessions/{id}/close")
+    public ResponseEntity<AttendanceSessionDTO> closeSession(Authentication auth,
+                                                             @PathVariable Long id,
+                                                             @RequestBody(required = false) CloseSessionRequest req) {
+        return ResponseEntity.ok(sessionService.close(auth.getName(), id, req));
+    }
+
+    /** Update P/A/L on a past closed session (req 4.2.4). */
+    @PutMapping("/attendance/sessions/{id}/marks")
+    public ResponseEntity<AttendanceSessionDTO> updateSessionMarks(Authentication auth,
+                                                                   @PathVariable Long id,
+                                                                   @RequestBody CloseSessionRequest req) {
+        return ResponseEntity.ok(sessionService.updateMarks(auth.getName(), id, req));
+    }
+
+    private static String nullToDash(String s) { return s == null ? "—" : s; }
+}
