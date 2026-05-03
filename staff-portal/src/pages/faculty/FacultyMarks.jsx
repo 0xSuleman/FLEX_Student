@@ -201,7 +201,7 @@ export default function FacultyMarks() {
   const saveAll = async () => {
     if (!courseId) return
     if (!weightOk) {
-      setToast({ kind: 'err', text: `Total weight ${totalWeight}% exceeds 100% (req 4.4.3).` })
+      setToast({ kind: 'err', text: `Total weight ${totalWeight}% exceeds 100%.` })
       clearToastSoon()
       return
     }
@@ -279,7 +279,7 @@ export default function FacultyMarks() {
 
   const clearToastSoon = () => setTimeout(() => setToast(null), 3500)
 
-  // ── Excel round-trip (req 4.5.3 / 4.5.4) ──
+  // ── Excel round-trip ──
   const downloadTemplate = async () => {
     if (!courseId) return
     if (instruments.length === 0) {
@@ -375,14 +375,14 @@ export default function FacultyMarks() {
           <GradeStateBadge state={gradeState} />
           <div className="ml-auto flex items-center gap-2">
             <button onClick={downloadTemplate} disabled={!courseId || instruments.length === 0}
-              title="Download Flex-formatted xlsx (req 4.5.3)"
+              title="Download Flex-formatted xlsx"
               className="bg-coffee text-bone border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
               <Download size={11} strokeWidth={3} /> Template
             </button>
             <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden"
               onChange={(e) => uploadFilledTemplate(e.target.files?.[0])} />
             <button onClick={() => fileInputRef.current?.click()} disabled={!courseId || uploading}
-              title="Upload filled marks sheet (req 4.5.3 / 4.5.4)"
+              title="Upload filled marks sheet"
               className="bg-mustard text-ink border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
               <Upload size={11} strokeWidth={3} /> {uploading ? 'Uploading…' : 'Upload'}
             </button>
@@ -498,7 +498,7 @@ export default function FacultyMarks() {
           <div className="p-4 space-y-2 text-xs text-ink">
             {(uploadResult.structureErrors || []).length > 0 && (
               <div>
-                <div className="font-extrabold text-bad uppercase tracking-wider mb-1.5">Structure errors (req 4.5.4)</div>
+                <div className="font-extrabold text-bad uppercase tracking-wider mb-1.5">Structure errors</div>
                 <ul className="list-disc list-inside space-y-1 text-cocoa">
                   {uploadResult.structureErrors.map((e, i) => <li key={i}>{e}</li>)}
                 </ul>

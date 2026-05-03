@@ -53,7 +53,7 @@ export default function HodWithdrawals() {
   return (
     <div className="space-y-5 max-w-[1500px]">
       <PageHeader kicker="Withdrawals" KickerIcon={FileX} title="WITHDRAWAL APPROVALS"
-        subtitle="Faculty-recommended withdrawal requests awaiting your final decision (req 5.5)." />
+        subtitle="Faculty-recommended withdrawal requests awaiting your final decision." />
 
       {toast && (
         <div className={`chunky-card p-3 flex items-center gap-2 ${toast.kind === 'ok' ? 'bg-moss text-cream' : 'bg-bad text-bone'}`}>

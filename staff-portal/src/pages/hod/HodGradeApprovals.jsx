@@ -75,7 +75,7 @@ export default function HodGradeApprovals() {
   return (
     <div className="space-y-5 max-w-[1500px]">
       <PageHeader kicker="Approvals" KickerIcon={GraduationCap} title="GRADE APPROVALS"
-        subtitle="Faculty grade-list submissions awaiting your decision. Approval publishes finals + grades to students (req 5.2.3)." />
+        subtitle="Faculty grade-list submissions awaiting your decision. Approval publishes finals + grades to students." />
 
       {toast && (
         <div className={`chunky-card p-3 flex items-center gap-2 ${toast.kind === 'ok' ? 'bg-moss text-cream' : 'bg-bad text-bone'}`}>

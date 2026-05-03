@@ -32,7 +32,7 @@ export default function HodMonitoring() {
   return (
     <div className="space-y-5 max-w-[1500px]">
       <PageHeader kicker="Monitoring" KickerIcon={BarChart3} title="DEPARTMENT MONITORING"
-        subtitle="Per-section attendance averages and grade-submission state across the department (req 5.3)." />
+        subtitle="Per-section attendance averages and grade-submission state across the department." />
 
       <div className="flex items-center justify-end">
         <button onClick={load} className="bg-bone text-ink border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1">

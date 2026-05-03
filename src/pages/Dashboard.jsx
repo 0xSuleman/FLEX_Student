@@ -630,17 +630,29 @@ function SysLine({ label, value }) {
 function DashboardCalendar() {
   const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-  const [month, setMonth] = useState(4)
-  const year = 2026
   const pkNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Karachi' }))
   const todayMonth = pkNow.getMonth() + 1
   const todayDay = pkNow.getDate()
+  const todayYear = pkNow.getFullYear()
+  // Default the calendar to today's month/year. Arrows let you navigate
+  // forwards / backwards from there.
+  const [month, setMonth] = useState(todayMonth)
+  const [year, setYear] = useState(todayYear)
   const eventsByMonth = { 1: [14, 19, 26], 2: [16, 18, 20], 4: [14, 16, 18, 22], 5: [4, 6, 8] }
   const events = eventsByMonth[month] || []
 
   const firstPos = (new Date(year, month - 1, 1).getDay() + 6) % 7
   const daysInMonth = new Date(year, month, 0).getDate()
   const prevMonthLastDay = new Date(year, month - 1, 0).getDate()
+
+  const goPrev = () => {
+    if (month === 1) { setMonth(12); setYear(year - 1) }
+    else setMonth(month - 1)
+  }
+  const goNext = () => {
+    if (month === 12) { setMonth(1); setYear(year + 1) }
+    else setMonth(month + 1)
+  }
 
   const cells = []
   for (let i = firstPos - 1; i >= 0; i--) cells.push({ d: prevMonthLastDay - i, muted: true })
@@ -651,11 +663,11 @@ function DashboardCalendar() {
   return (
     <div className="bg-cream border-2 border-ink rounded-lg shadow-pixel overflow-hidden cascade-in shrink-0 w-[260px]" style={{ animationDelay: '0.05s' }}>
       <div className="bg-cocoa border-b-2 border-ink px-3 py-2 flex items-center justify-between">
-        <button onClick={() => month > 1 && setMonth(month - 1)} disabled={month <= 1} className={`transition-all ${month > 1 ? 'text-bone/80 hover:text-burn hover:-translate-x-0.5' : 'text-bone/20 cursor-not-allowed'}`}>
+        <button onClick={goPrev} className="transition-all text-bone/80 hover:text-burn hover:-translate-x-0.5">
           <ChevronLeft size={16} strokeWidth={3} />
         </button>
         <div className="font-display text-[10px] text-bone uppercase tracking-wider">{monthNames[month - 1]} {year}</div>
-        <button onClick={() => month < 12 && setMonth(month + 1)} disabled={month >= 12} className={`transition-all ${month < 12 ? 'text-bone/80 hover:text-burn hover:translate-x-0.5' : 'text-bone/20 cursor-not-allowed'}`}>
+        <button onClick={goNext} className="transition-all text-bone/80 hover:text-burn hover:translate-x-0.5">
           <ChevronRight size={16} strokeWidth={3} />
         </button>
       </div>

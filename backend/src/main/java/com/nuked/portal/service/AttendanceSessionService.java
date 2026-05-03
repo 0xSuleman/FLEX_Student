@@ -34,17 +34,15 @@ public class AttendanceSessionService {
     public AttendanceSessionDTO open(String username, OpenSessionRequest req) {
         FacultySection fs = facultyService.ownedSection(username, req.getFacultySectionId());
 
-        int duration = req.getDurationMinutes() == null ? 15 : Math.max(5, Math.min(30, req.getDurationMinutes()));
+        int duration = req.getDurationMinutes() == null ? 15 : Math.max(5, Math.min(180, req.getDurationMinutes()));
         Instant now = Instant.now();
 
-        // BLE device name MUST be provided and start with FLEX- — that's how
-        // the student's browser filter narrows the picker to teacher devices.
+        // BLE device name MUST be provided — it's what students will pair to
+        // when they Connect Bluetooth. Whatever the teacher's device is
+        // currently broadcasting under (laptop name, phone name, beacon name).
         String bleName = req.getBleDeviceName() == null ? null : req.getBleDeviceName().trim();
         if (bleName == null || bleName.isEmpty()) {
-            throw new IllegalArgumentException("bleDeviceName is required — set the broadcasting device name (e.g. FLEX-CS3001-A) before opening a session.");
-        }
-        if (!bleName.toUpperCase().startsWith("FLEX-")) {
-            throw new IllegalArgumentException("bleDeviceName must start with 'FLEX-' so students' browsers can filter for it.");
+            throw new IllegalArgumentException("bleDeviceName is required — type the exact name your laptop/phone is broadcasting via Bluetooth.");
         }
 
         AttendanceSession s = new AttendanceSession();

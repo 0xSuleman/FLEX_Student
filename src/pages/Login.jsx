@@ -205,7 +205,7 @@ export default function Login() {
                 </label>
                 <input
                   type="text"
-                  placeholder="24L-3072"
+                  placeholder="xxL-xxxx"
                   value={rollNo}
                   onChange={(e) => setRollNo(e.target.value)}
                   className="input-3d w-full bg-ink border-2 border-ink rounded-md px-3 py-2.5 font-mono text-sm text-bone placeholder:text-bone/30 focus:outline-none transition-all"

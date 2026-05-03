@@ -10,7 +10,7 @@ import { PageHeader, SectionCard, ActionButton, StatCard } from '../../component
 // ── Mode constants ──
 // EDIT replaces the old MANUAL flow — instead of typing topic/duration and
 // rebuilding from scratch, faculty picks a past closed session and edits its
-// P/A/L inline (per req 4.2.4).
+// P/A/L inline.
 const IDLE = 'idle'
 const VIEW = 'view'
 const EDIT = 'edit'
@@ -160,23 +160,23 @@ export default function FacultyAttendance() {
       clearToastSoon()
       return
     }
-    const cleanedName = bleDeviceName.trim()
-    if (!cleanedName.toUpperCase().startsWith('FLEX-')) {
-      setToast({ kind: 'err', text: 'BLE device name must start with FLEX- (e.g. FLEX-CS3001-A). Set this to the name your phone or beacon is broadcasting.' })
+    const cleanedName = (bleDeviceName || '').trim()
+    if (!cleanedName) {
+      setToast({ kind: 'err', text: 'BLE device name is required. Type the exact name your laptop or phone is broadcasting under.' })
       clearToastSoon()
       return
     }
-    // Hard gate: faculty must verify their BLE device is reachable from this
-    // browser too. No silent skip if Web Bluetooth is missing or pairing fails.
     if (!bleSupported) {
       setToast({ kind: 'err', text: 'Bluetooth is not available in this browser. Use Chrome/Edge over HTTPS or localhost.' })
       clearToastSoon()
       return
     }
     try {
-      await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'FLEX-' }], optionalServices: [] })
+      // Faculty does a sanity-pair to verify their device is reachable.
+      // Picker shows everything; faculty selects their own device.
+      await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [] })
     } catch (err) {
-      setToast({ kind: 'err', text: 'Bluetooth pairing was cancelled. Open nRF Connect on your phone, broadcast the FLEX- name, then retry.' })
+      setToast({ kind: 'err', text: 'Bluetooth pairing cancelled. Make sure your device is broadcasting + Bluetooth is on, then retry.' })
       clearToastSoon()
       return
     }
@@ -410,20 +410,13 @@ export default function FacultyAttendance() {
               <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Iterative & Incremental Models"
                 className="w-full bg-bone border-2 border-ink rounded-md px-3 py-2 font-mono text-sm text-ink focus:outline-none" />
             </Field>
-            <Field className="md:col-span-3" label={`Duration · ${duration} min`}>
-              <input type="range" min="5" max="30" step="5" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full accent-burn" />
-              <div className="flex justify-between text-[9px] font-extrabold text-cocoa uppercase tracking-wider mt-0.5">
-                <span>5</span><span>15</span><span>30</span>
-              </div>
+            <Field className="md:col-span-3" label={`Duration · ${duration >= 60 ? `${(duration / 60).toFixed(duration % 60 ? 1 : 0)} hr` : `${duration} min`}`}>
+              <input type="range" min="5" max="180" step="5" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full accent-ink" />
             </Field>
             <Field className="md:col-span-2" label="BLE device name">
-              <input value={bleDeviceName} onChange={(e) => setBleDeviceName(e.target.value)} placeholder="FLEX-CS3001-A"
+              <input value={bleDeviceName} onChange={(e) => setBleDeviceName(e.target.value)} placeholder=""
                 className="w-full bg-bone border-2 border-ink rounded-md px-3 py-2 font-mono text-sm text-ink focus:outline-none" />
             </Field>
-            <div className="md:col-span-12 bg-mustard/15 border-2 border-mustard rounded-md p-3 text-[11px] text-ink leading-relaxed">
-              <div className="font-extrabold uppercase tracking-widest text-burn mb-1 text-[10px]">&gt; Set up your broadcasting device first</div>
-              On your phone, install <span className="font-mono font-extrabold">nRF Connect</span> (Android) or <span className="font-mono font-extrabold">Bluetooth LE Lab</span> (iOS) → open Advertiser → set Device Name to the value above (e.g. <span className="font-mono font-extrabold">FLEX-CS3001-A</span>) → Start broadcasting. Students will only be able to mark attendance if they BLE-connect to that exact device.
-            </div>
             <div className="md:col-span-12 flex justify-end gap-2">
               <ActionButton tone="bone" Icon={X} onClick={cancelMode}>Back</ActionButton>
               <ActionButton tone="cocoa" Icon={Play} onClick={openBleWindow}>Open</ActionButton>
@@ -444,17 +437,28 @@ export default function FacultyAttendance() {
             <div className="md:col-span-2 flex gap-2 items-end">
               <ActionButton tone="bad" Icon={Square} onClick={closeBleAndSave} disabled={saving}>{saving ? 'Saving…' : 'Close & Save'}</ActionButton>
             </div>
-            <div className="md:col-span-12">
-              <div className="bg-bone border-2 border-ink rounded h-3 overflow-hidden relative">
-                <div className="h-full bg-burn transition-all duration-1000" style={{ width: `${elapsedPct}%` }} />
-                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold text-ink uppercase tracking-widest">
-                  {Math.round(elapsedPct)}% elapsed · token {bleSession.sessionToken}
+            <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="bg-cream border-2 border-ink rounded-md p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-extrabold text-coffee uppercase tracking-widest">&gt; Session progress</span>
+                  <span className="tag bg-coffee text-bone tabular-nums">{Math.round(elapsedPct)}%</span>
+                </div>
+                <div className="bg-bone border-2 border-ink rounded h-4 overflow-hidden relative">
+                  <div className="h-full bg-burn transition-all duration-1000" style={{ width: `${elapsedPct}%` }} />
+                </div>
+                <div className="mt-1.5 text-[10px] font-extrabold text-cocoa uppercase tracking-wider">
+                  Token <span className="font-mono text-ink">{bleSession.sessionToken}</span>
                 </div>
               </div>
-            </div>
-            <div className="md:col-span-12 text-[11px] font-extrabold text-coffee uppercase tracking-wider flex items-center gap-2">
-              <Bluetooth size={12} strokeWidth={3} className="text-burn" />
-              Students must connect to <span className="font-mono bg-bone border-2 border-ink rounded px-2 py-0.5 text-ink">{bleDeviceName}</span> to mark attendance.
+              <div className="bg-coffee text-bone border-2 border-ink rounded-md p-3 flex items-center gap-3">
+                <div className="w-10 h-10 bg-bone border-2 border-ink rounded-md flex items-center justify-center shrink-0">
+                  <Bluetooth size={18} className="text-coffee" strokeWidth={3} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-extrabold uppercase tracking-widest opacity-80">&gt; Students must pair with</div>
+                  <div className="font-mono font-extrabold text-base mt-0.5 truncate">{bleDeviceName}</div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -471,7 +475,7 @@ export default function FacultyAttendance() {
         {mode === EDIT && (
           <div className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 text-xs font-extrabold text-cocoa uppercase tracking-wider">
-              <Hand size={14} strokeWidth={3} className="text-burn" /> Edit mode — click a session to update P/A/L (req 4.2.4 · date stays fixed per req 4.2.5)
+              <Hand size={14} strokeWidth={3} className="text-burn" /> Edit mode — click a session to update P/A/L ( · date stays fixed)
             </div>
             <ActionButton tone="bone" Icon={X} onClick={() => { setMode(IDLE); setEditSessionId(null) }}>Back</ActionButton>
           </div>
@@ -541,7 +545,7 @@ export default function FacultyAttendance() {
       {(mode === VIEW || mode === EDIT) && (
         <SectionCard title={`Past Sessions — ${course?.courseCode || ''} · ${course?.section || ''}`}
           right={mode === EDIT
-            ? <div className="text-[10px] font-extrabold text-cocoa uppercase tracking-widest">Click any row to edit P/A/L · req 4.2.4</div>
+            ? <div className="text-[10px] font-extrabold text-cocoa uppercase tracking-widest">Click any row to edit P/A/L</div>
             : <div className="text-[10px] font-extrabold text-cocoa uppercase tracking-widest">Read-only history</div>}>
           {viewLoading ? (
             <div className="flex items-center justify-center h-32"><div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" /></div>
@@ -635,7 +639,7 @@ export default function FacultyAttendance() {
             </table>
             {mode === EDIT && (
               <div className="px-5 py-3 border-t-2 border-dashed border-cocoa/30 text-[11px] font-bold text-cocoa uppercase tracking-wider">
-                &gt; Per req 4.2.4 you can update P/A/L for any past lecture in this semester. The session date stays fixed (req 4.2.5).
+                &gt; you can update P/A/L for any past lecture in this semester. The session date stays fixed.
               </div>
             )}
           </>)}

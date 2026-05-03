@@ -76,7 +76,7 @@ export default function FacultyGrading() {
   return (
     <div className="space-y-5 max-w-[1500px]">
       <PageHeader kicker="Grading" KickerIcon={GraduationCap} title="GRADING"
-        subtitle="Computed from saved marks. Review the distribution, then submit to the HOD. Grades become visible to students only after HOD approval (req 5.2.3)." />
+        subtitle="Computed from saved marks. Review the distribution, then submit to the HOD. Grades become visible to students only after HOD approval." />
 
       <div className="chunky-card overflow-hidden">
         <div className="px-5 py-4 border-b-2 border-ink bg-tan flex items-center gap-3 flex-wrap">

@@ -4,10 +4,6 @@ import api from '../services/api'
 
 const POLL_MS = 8000
 
-// Real BLE connection lifecycle:
-//   - click "Connect Bluetooth" → navigator.bluetooth.requestDevice → user picks → device.gatt.connect()
-//   - keep `device` + listen to 'gattserverdisconnected' so we flip back to disconnected automatically
-//   - "Mark Attendance" is disabled unless `bleConnected === true`
 export default function LiveAttendanceWidget() {
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -19,6 +15,7 @@ export default function LiveAttendanceWidget() {
 
   // BLE state
   const [bleSupported] = useState(typeof navigator !== 'undefined' && 'bluetooth' in navigator)
+  const [bleAdapterOn, setBleAdapterOn] = useState(false)
   const [bleDevice, setBleDevice] = useState(null)
   const [bleConnected, setBleConnected] = useState(false)
   const [bleConnecting, setBleConnecting] = useState(false)
@@ -31,27 +28,53 @@ export default function LiveAttendanceWidget() {
       .finally(() => setLoading(false))
   }
 
+  // Watch the OS Bluetooth adapter so we only show the Pair button once it's on.
+  const refreshAdapter = async () => {
+    if (!bleSupported || !navigator.bluetooth.getAvailability) {
+      setBleAdapterOn(false)
+      return
+    }
+    try {
+      const ok = await navigator.bluetooth.getAvailability()
+      setBleAdapterOn(!!ok)
+    } catch { setBleAdapterOn(false) }
+  }
+
   useEffect(() => {
     poll()
+    refreshAdapter()
     pollRef.current = setInterval(poll, POLL_MS)
     tickRef.current = setInterval(() => setNow(Date.now()), 1000)
-    return () => { clearInterval(pollRef.current); clearInterval(tickRef.current) }
+    const adapterPoll = setInterval(refreshAdapter, 3000)
+    let availabilityListener
+    if (bleSupported && navigator.bluetooth.addEventListener) {
+      availabilityListener = (e) => setBleAdapterOn(!!e.value)
+      try { navigator.bluetooth.addEventListener('availabilitychanged', availabilityListener) } catch {}
+    }
+    return () => {
+      clearInterval(pollRef.current)
+      clearInterval(tickRef.current)
+      clearInterval(adapterPoll)
+      if (availabilityListener && navigator.bluetooth.removeEventListener) {
+        try { navigator.bluetooth.removeEventListener('availabilitychanged', availabilityListener) } catch {}
+      }
+    }
   }, [])
 
-  // ── BLE connection flow ──
-  // Filter to FLEX-* devices only — that's the convention the teacher uses
-  // when broadcasting from their phone (nRF Connect Advertiser). The picker
-  // therefore ONLY shows classroom devices, not random AirPods nearby.
   const connectBluetooth = async () => {
     setBleError(null)
     if (!bleSupported) {
-      setBleError('Web Bluetooth not available. Use Chrome/Edge over HTTPS or localhost.')
+      setBleError('Bluetooth not available in this browser. Use Chrome or Edge.')
+      return
+    }
+    if (!bleAdapterOn) {
+      setBleError('Turn on Bluetooth on this device first.')
       return
     }
     setBleConnecting(true)
     try {
       const device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: 'FLEX-' }],
+        acceptAllDevices: true,
         optionalServices: [],
       })
       try {
@@ -62,7 +85,7 @@ export default function LiveAttendanceWidget() {
       setBleConnected(true)
     } catch (err) {
       setBleError(err && err.name === 'NotFoundError'
-        ? 'No FLEX- device found in range. Make sure your teacher\'s phone is broadcasting (e.g. via nRF Connect).'
+        ? 'No Bluetooth device selected.'
         : 'Bluetooth pairing failed: ' + (err?.message || 'unknown error'))
       setBleConnected(false)
     } finally {
@@ -121,11 +144,18 @@ export default function LiveAttendanceWidget() {
     }
   }
 
+  // Cross-check: do any of the currently open sessions expect a device name
+  // that matches what the student paired with?
+  const expectedNames = sessions.map(s => s.bleDeviceName).filter(Boolean)
+  const connectedName = bleDevice?.name || ''
+  const nameMatchesAnySession = expectedNames.length === 0
+    || expectedNames.some(n => n.toLowerCase() === connectedName.toLowerCase())
+  const showMismatchWarning = bleConnected && !nameMatchesAnySession && expectedNames.length > 0
+
   return (
     <div className="space-y-3">
-      {/* BLE control bar — always visible so the student knows the connection state. */}
-      <div className={`chunky-card p-3 flex items-center gap-3 ${bleConnected ? 'bg-moss/15 border-moss' : 'bg-cream'}`}>
-        <div className={`w-10 h-10 border-2 border-ink shadow-pixel-sm rounded-md flex items-center justify-center shrink-0 ${bleConnected ? 'bg-moss' : 'bg-cocoa'}`}>
+      <div className={`chunky-card p-3 flex items-center gap-3 ${showMismatchWarning ? 'bg-bad/15 border-bad' : bleConnected ? 'bg-moss/15 border-moss' : 'bg-cream'}`}>
+        <div className={`w-10 h-10 border-2 border-ink shadow-pixel-sm rounded-md flex items-center justify-center shrink-0 ${showMismatchWarning ? 'bg-bad' : bleConnected ? 'bg-moss' : 'bg-cocoa'}`}>
           {bleConnected
             ? <BluetoothConnected size={16} className="text-cream" strokeWidth={2.8} />
             : !bleSupported ? <BluetoothOff size={16} className="text-bone" strokeWidth={2.8} />
@@ -137,44 +167,37 @@ export default function LiveAttendanceWidget() {
           </div>
           <div className="text-[11px] text-cocoa font-bold mt-0.5">
             {!bleSupported
-              ? 'Web Bluetooth not supported in this browser.'
-              : bleConnected
-                ? <>Connected to <span className="font-mono text-ink">{bleDevice?.name || 'device'}</span> — you can mark attendance.</>
-                : (bleError || 'Not connected. Click "Connect Bluetooth" to enable attendance marking.')}
+              ? 'Bluetooth not available in this browser. Use Chrome or Edge.'
+              : !bleAdapterOn
+                ? 'Turn on Bluetooth on this device first. The pair button will appear once Bluetooth is on.'
+                : !bleConnected
+                  ? (bleError || (sessions.length === 0
+                      ? 'Bluetooth is on. No live session yet — when your teacher opens one, pair with their device.'
+                      : 'Bluetooth is on. Click "Pair Device" and pick the device your teacher named.'))
+                  : showMismatchWarning
+                    ? <>Paired with <span className="font-mono text-ink">{connectedName || 'device'}</span>, but the teacher's device is <span className="font-mono text-ink">{expectedNames.join(' / ')}</span>. Disconnect and pair with that one.</>
+                    : sessions.length === 0
+                      ? <>Paired with <span className="font-mono text-ink">{connectedName || 'device'}</span>. Waiting for your teacher to open a session.</>
+                      : <>Paired with <span className="font-mono text-ink">{connectedName || 'device'}</span>. You can mark attendance now.</>}
           </div>
         </div>
         <div className="shrink-0 flex items-center gap-2">
-          <span className={`tag ${bleConnected ? 'bg-moss text-cream' : 'bg-bad text-bone'}`}>
-            {bleConnected ? 'CONNECTED' : 'NOT CONNECTED'}
+          <span className={`tag ${showMismatchWarning ? 'bg-bad text-bone' : bleConnected ? 'bg-moss text-cream' : !bleAdapterOn ? 'bg-bad text-bone' : 'bg-mustard text-ink'}`}>
+            {bleConnected ? (showMismatchWarning ? 'WRONG DEVICE' : 'CONNECTED') : !bleAdapterOn ? 'BLUETOOTH OFF' : 'NOT PAIRED'}
           </span>
           {bleConnected ? (
             <button onClick={disconnectBluetooth}
               className="bg-bone text-ink border-2 border-ink rounded-md px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">
               Disconnect
             </button>
-          ) : (
+          ) : (bleAdapterOn && sessions.length > 0) ? (
             <button onClick={connectBluetooth} disabled={!bleSupported || bleConnecting}
               className="bg-burn text-bone border-2 border-ink rounded-md px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-50 inline-flex items-center gap-1.5">
-              <Bluetooth size={11} strokeWidth={3} /> {bleConnecting ? 'Pairing…' : 'Connect Bluetooth'}
+              <Bluetooth size={11} strokeWidth={3} /> {bleConnecting ? 'Pairing…' : 'Pair Device'}
             </button>
-          )}
+          ) : null}
         </div>
       </div>
-
-      {sessions.length === 0 && (
-        <div className="chunky-card p-4 flex items-center gap-3 bg-cream">
-          <div className="w-10 h-10 bg-cocoa border-2 border-ink shadow-pixel-sm rounded-md flex items-center justify-center shrink-0">
-            <Bluetooth size={16} className="text-bone" strokeWidth={2.8} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-display text-[11px] uppercase tracking-widest text-ink">BLE Attendance</div>
-            <div className="text-[11px] text-cocoa font-bold mt-0.5">
-              {loading ? 'Checking for live sessions…' : 'No live session right now. When your faculty opens a window, a Mark Attendance button will appear here.'}
-            </div>
-          </div>
-          <span className="tag bg-bone text-ink shrink-0">{loading ? 'POLLING' : 'IDLE'}</span>
-        </div>
-      )}
 
       {toast && (
         <div className={`chunky-card p-3 flex items-center gap-3 ${toast.kind === 'ok' ? 'bg-moss text-cream' : 'bg-bad text-bone'}`}>
@@ -188,7 +211,8 @@ export default function LiveAttendanceWidget() {
         const remainingMin = Math.floor(remainingMs / 60000)
         const remainingSec = Math.floor((remainingMs % 60000) / 1000)
         const expired = remainingMs <= 0
-        const canMark = bleConnected && !expired && !s.alreadyMarked
+        const nameMatch = !s.bleDeviceName || (connectedName && s.bleDeviceName.toLowerCase() === connectedName.toLowerCase())
+        const canMark = bleConnected && !expired && !s.alreadyMarked && nameMatch
         return (
           <div key={s.sessionId} className={`chunky-card p-4 cascade-in ${s.alreadyMarked ? 'bg-moss/10 border-moss' : 'border-burn ring-2 ring-burn/30'}`}>
             <div className="flex items-start gap-4 flex-wrap">
@@ -228,7 +252,7 @@ export default function LiveAttendanceWidget() {
                   <button
                     disabled={marking === s.sessionId || !canMark}
                     onClick={() => mark(s)}
-                    title={canMark ? 'Mark Present' : 'Connect Bluetooth first'}
+                    title={canMark ? 'Mark Present' : (!bleConnected ? 'Connect Bluetooth first' : !nameMatch ? `Pair with ${s.bleDeviceName}` : 'Cannot mark')}
                     className="bg-bone text-ink border-2 border-ink rounded-md px-4 py-2.5 font-display text-xs uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {marking === s.sessionId ? (
@@ -239,6 +263,10 @@ export default function LiveAttendanceWidget() {
                     ) : !bleConnected ? (
                       <>
                         <BluetoothOff size={14} strokeWidth={3} /> Connect BLE first
+                      </>
+                    ) : !nameMatch ? (
+                      <>
+                        <BluetoothOff size={14} strokeWidth={3} /> Wrong device
                       </>
                     ) : (
                       <>

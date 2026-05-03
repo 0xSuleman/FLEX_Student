@@ -79,21 +79,21 @@ public class StudentAttendanceService {
             throw new RuntimeException("Session window has expired");
         }
 
-        // Real proximity check: the BLE device the student paired with MUST be
-        // the one the teacher registered when opening the session. Anything
-        // else means the student isn't in the room.
+        // Real proximity check: the BLE device the student paired with MUST
+        // equal the name the teacher registered when opening the session.
+        // Anything else = student isn't connected to the teacher's device.
         String expected = session.getBleDeviceName();
         String reported = reportedBleDeviceName == null ? null : reportedBleDeviceName.trim();
         if (expected == null || expected.isEmpty()) {
             throw new RuntimeException("Session has no registered BLE device name — re-open the session.");
         }
         if (reported == null || reported.isEmpty()) {
-            throw new RuntimeException("BLE device name is required — connect to the classroom Bluetooth device first.");
+            throw new RuntimeException("Connect Bluetooth first — attendance cannot be marked without a paired device.");
         }
         if (!expected.equalsIgnoreCase(reported)) {
             throw new RuntimeException("BLE device mismatch — you connected to '" + reported
                     + "' but this session is bound to '" + expected
-                    + "'. You're not in the right room.");
+                    + "'. Pair with the teacher's device.");
         }
 
         // Find the student's enrollment matching this session's course/section/semester

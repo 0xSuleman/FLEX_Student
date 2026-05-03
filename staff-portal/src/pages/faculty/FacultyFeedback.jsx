@@ -31,7 +31,7 @@ export default function FacultyFeedback() {
   return (
     <div className="space-y-5 max-w-[1500px]">
       <PageHeader kicker="Feedback" KickerIcon={MessageSquare} title="COURSE FEEDBACK"
-        subtitle="Aggregated student feedback per section (req 4.8.7). Individual responses are never revealed (req 3.11.3)." />
+        subtitle="Aggregated student feedback per section. Individual responses are never revealed." />
 
       {err && <div className="chunky-card p-3 bg-bad text-bone text-xs font-extrabold uppercase tracking-wider flex items-center gap-2"><AlertTriangle size={14} strokeWidth={3} />{err}</div>}
 

@@ -53,7 +53,7 @@ export default function HodRetakes() {
   return (
     <div className="space-y-5 max-w-[1500px]">
       <PageHeader kicker="Retake Exams" KickerIcon={Repeat} title="RETAKE APPROVALS"
-        subtitle="Pending retake-exam requests awaiting your decision (req 5.6)." />
+        subtitle="Pending retake-exam requests awaiting your decision." />
 
       {toast && (
         <div className={`chunky-card p-3 flex items-center gap-2 ${toast.kind === 'ok' ? 'bg-moss text-cream' : 'bg-bad text-bone'}`}>

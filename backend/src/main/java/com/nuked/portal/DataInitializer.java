@@ -207,7 +207,7 @@ public class DataInitializer implements CommandLineRunner {
 
         String[] names = {
                 "Suleman Ahmed", "Ahmad Hassan", "Fatima Zahra", "Muhammad Ali", "Ayesha Khan",
-                "Usman Tariq", "Zainab Malik", "Bilal Asghar", "Hira Nawaz", "Saad Qureshi",
+                "Usman Tariq", "Zainab Malik", "Bilal Asghar", "Hira Nawaz", "Shahzaib Saeed",
                 "Maryam Iqbal", "Hassan Raza", "Sana Javed", "Omar Farooq", "Nimra Sheikh",
                 "Talha Mehmood", "Amina Bibi", "Hamza Siddiqui", "Rabia Noor", "Danish Ahmed"
         };
@@ -270,11 +270,11 @@ public class DataInitializer implements CommandLineRunner {
                 "BS(AI)", "BS(AI)", "BS(AI)", "BS(AI)", "BS(AI)"
         };
 
-        // Section assignments: 0-6 A, 7-13 B, 14-19 C
+        // Section assignments: 0-9 A (incl. Shahzaib at idx 9), 10-14 B, 15-19 C
         String[] sections = new String[20];
         for (int i = 0; i < 20; i++) {
-            if (i <= 6)       sections[i] = "BSE-243A";
-            else if (i <= 13) sections[i] = "BSE-243B";
+            if (i <= 9)       sections[i] = "BSE-243A";
+            else if (i <= 14) sections[i] = "BSE-243B";
             else              sections[i] = "BSE-243C";
         }
 
@@ -288,7 +288,9 @@ public class DataInitializer implements CommandLineRunner {
 
         for (int s = 0; s < 20; s++) {
             String rollNo = rollNumbers[s];
-            String password = (s == 0) ? encodedPassword123 : encodedStudent123;
+            // 24L-3072 (Suleman) and 24L-3081 (Shahzaib) get password123;
+            // everyone else gets student123.
+            String password = (s == 0 || s == 9) ? encodedPassword123 : encodedStudent123;
             String section = sections[s];
             String degree = degrees[s];
 

@@ -59,7 +59,7 @@ export default function FacultyWithdrawals() {
   return (
     <div className="space-y-5 max-w-[1500px]">
       <PageHeader kicker="Course Withdrawals" KickerIcon={FileX} title="WITHDRAWAL REQUESTS"
-        subtitle="Recommend Approve to forward to HOD (req 3.12.5 / 4.7). Recommend Reject to close the request immediately." />
+        subtitle="Recommend Approve to forward to HOD. Recommend Reject to close the request immediately." />
 
       {toast && (
         <div className={`chunky-card p-3 flex items-center gap-2 ${toast.kind === 'ok' ? 'bg-moss text-cream' : 'bg-bad text-bone'}`}>
