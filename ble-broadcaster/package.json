@@ -1,0 +1,17 @@
+{
+  "name": "flex-ble-broadcaster",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Node.js BLE peripheral that advertises the classroom beacon for FLEX/NUKED attendance. Runs on the faculty laptop alongside the Spring backend.",
+  "main": "broadcast.js",
+  "scripts": {
+    "start": "node broadcast.js",
+    "broadcast": "node broadcast.js"
+  },
+  "dependencies": {
+    "@abandonware/bleno": "^0.5.1-4"
+  },
+  "engines": {
+    "node": ">=16 <21"
+  }
+}
