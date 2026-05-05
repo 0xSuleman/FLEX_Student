@@ -111,6 +111,59 @@ public class FacultyExtraController {
         return ResponseEntity.ok(out);
     }
 
+    /** Per-session attendance xlsx — just that one lecture's roster. */
+    @GetMapping("/attendance/sessions/{sessionId}/export")
+    public ResponseEntity<byte[]> exportSession(Authentication auth,
+                                                @PathVariable Long sessionId) throws IOException {
+        AttendanceSession s = attendanceSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown session " + sessionId));
+        FacultySection fs = facultyService.ownedSection(auth.getName(), s.getFacultySection().getId());
+        List<Enrollment> enrolled = enrollmentRepository.findByCourseIdAndSectionAndSemester(
+                fs.getCourse().getId(), fs.getSection(), fs.getSemester());
+
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            org.apache.poi.xssf.usermodel.XSSFSheet sheet = wb.createSheet("Session");
+            sheet.createRow(0).createCell(0).setCellValue("FAST-NUCES Attendance");
+            org.apache.poi.ss.usermodel.Row r2 = sheet.createRow(1);
+            r2.createCell(0).setCellValue("Course");  r2.createCell(1).setCellValue(fs.getCourse().getCode());
+            org.apache.poi.ss.usermodel.Row r3 = sheet.createRow(2);
+            r3.createCell(0).setCellValue("Section"); r3.createCell(1).setCellValue(fs.getSection());
+            org.apache.poi.ss.usermodel.Row r4 = sheet.createRow(3);
+            r4.createCell(0).setCellValue("Lecture"); r4.createCell(1).setCellValue(s.getLectureNo() == null ? "" : s.getLectureNo().toString());
+            org.apache.poi.ss.usermodel.Row r5 = sheet.createRow(4);
+            r5.createCell(0).setCellValue("Date");    r5.createCell(1).setCellValue(s.getLectureDate() == null ? "" : s.getLectureDate().toString());
+            org.apache.poi.ss.usermodel.Row r6 = sheet.createRow(5);
+            r6.createCell(0).setCellValue("Topic");   r6.createCell(1).setCellValue(s.getTopic() == null ? "" : s.getTopic());
+
+            org.apache.poi.ss.usermodel.Row hdr = sheet.createRow(7);
+            String[] headers = {"#", "Roll", "Name", "Status", "Method"};
+            for (int i = 0; i < headers.length; i++) hdr.createCell(i).setCellValue(headers[i]);
+
+            int row = 8, idx = 1;
+            for (Enrollment e : enrolled) {
+                if (e.getStudent() == null) continue;
+                org.apache.poi.ss.usermodel.Row r = sheet.createRow(row++);
+                Attendance a = attendanceRepository.findBySessionIdAndEnrollmentId(s.getId(), e.getId()).orElse(null);
+                String presence = a == null ? "—" : (a.getPresence() == null ? "—" : a.getPresence());
+                String method = a == null ? "—" : (a.getMethod() == null ? "—" : a.getMethod());
+                r.createCell(0).setCellValue(idx++);
+                r.createCell(1).setCellValue(e.getStudent().getRollNo());
+                r.createCell(2).setCellValue(e.getStudent().getName());
+                r.createCell(3).setCellValue(presence);
+                r.createCell(4).setCellValue(method);
+            }
+            for (int i = 0; i < headers.length; i++) sheet.autoSizeColumn(i);
+
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            wb.write(out);
+            String filename = "attendance-session-" + sessionId + ".xlsx";
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .body(out.toByteArray());
+        }
+    }
+
     /** Per-section attendance roster as a Flex-formatted xlsx. */
     @GetMapping("/sections/{sectionId}/attendance/export")
     public ResponseEntity<byte[]> exportAttendance(Authentication auth,

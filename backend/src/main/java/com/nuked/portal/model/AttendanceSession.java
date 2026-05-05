@@ -56,4 +56,11 @@ public class AttendanceSession {
      */
     @Column(length = 64)
     private String bleDeviceName;
+
+    /** Classroom lat/long captured when the teacher opened the session. */
+    private Double latitude;
+    private Double longitude;
+
+    /** Max distance (meters) from the classroom for a mark to be accepted. */
+    private Integer allowedRadiusMeters;
 }

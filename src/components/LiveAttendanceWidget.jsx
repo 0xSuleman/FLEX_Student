@@ -77,10 +77,13 @@ export default function LiveAttendanceWidget() {
         acceptAllDevices: true,
         optionalServices: [],
       })
-      try {
-        if (device.gatt && !device.gatt.connected) await device.gatt.connect()
-      } catch (_) { /* device chosen but GATT refused — still treat as paired */ }
-      device.addEventListener('gattserverdisconnected', handleDisconnect)
+      // Don't actually open a GATT connection — Android peripherals in
+      // "Pair new device" mode and many phones reject or hang on
+      // device.gatt.connect(). Picking the device is sufficient: we have
+      // device.name and the backend cross-checks against the session's
+      // recorded name. Listen for disconnect events anyway in case the
+      // device drops off (e.g. user moves out of range).
+      try { device.addEventListener('gattserverdisconnected', handleDisconnect) } catch {}
       setBleDevice(device)
       setBleConnected(true)
     } catch (err) {
@@ -128,11 +131,52 @@ export default function LiveAttendanceWidget() {
       setTimeout(() => setToast(null), 5000)
       return
     }
+    // Geolocation gate: backend cross-checks distance against the session's
+    // classroom coords.
+    if (!navigator.geolocation) {
+      setToast({ kind: 'err', text: 'Geolocation not supported in this browser.' })
+      setMarking(null)
+      setTimeout(() => setToast(null), 4500)
+      return
+    }
+    if (navigator.permissions?.query) {
+      try {
+        const status = await navigator.permissions.query({ name: 'geolocation' })
+        if (status.state === 'denied') {
+          setToast({ kind: 'err', text: 'Location is blocked for this site. Click the 🔒 in the address bar → Site settings → Location → Allow, then reload.' })
+          setMarking(null)
+          setTimeout(() => setToast(null), 6000)
+          return
+        }
+      } catch { /* permissions API unsupported — fall through to getCurrentPosition */ }
+    }
+    let coords = null
+    try {
+      coords = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        )
+      })
+    } catch (err) {
+      const msg = err?.code === 1
+        ? 'Location is blocked for this site. Click the 🔒 in the address bar → Site settings → Location → Allow, then reload.'
+        : err?.code === 3
+          ? 'Location request timed out. Move near a window or check that Location Services are enabled, then retry.'
+          : 'Location unavailable. Allow location access and retry.'
+      setToast({ kind: 'err', text: msg })
+      setMarking(null)
+      setTimeout(() => setToast(null), 6000)
+      return
+    }
     try {
       await api.post('/student/attendance/mark', {
         sessionId: s.sessionId,
         sessionToken: s.sessionToken,
         bleDeviceName: bleDevice.name,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
       })
       setToast({ kind: 'ok', text: `Present marked for ${s.courseCode} · ${s.section}.` })
       poll()
@@ -191,10 +235,17 @@ export default function LiveAttendanceWidget() {
               Disconnect
             </button>
           ) : (bleAdapterOn && sessions.length > 0) ? (
-            <button onClick={connectBluetooth} disabled={!bleSupported || bleConnecting}
-              className="bg-burn text-bone border-2 border-ink rounded-md px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-50 inline-flex items-center gap-1.5">
-              <Bluetooth size={11} strokeWidth={3} /> {bleConnecting ? 'Pairing…' : 'Pair Device'}
-            </button>
+            bleConnecting ? (
+              <button onClick={() => { setBleConnecting(false); setBleError('Pairing cancelled.') }}
+                className="bg-bone text-ink border-2 border-ink rounded-md px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1.5">
+                <Bluetooth size={11} strokeWidth={3} className="animate-pulse" /> Cancel
+              </button>
+            ) : (
+              <button onClick={connectBluetooth} disabled={!bleSupported}
+                className="bg-burn text-bone border-2 border-ink rounded-md px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-50 inline-flex items-center gap-1.5">
+                <Bluetooth size={11} strokeWidth={3} /> Pair Device
+              </button>
+            )
           ) : null}
         </div>
       </div>

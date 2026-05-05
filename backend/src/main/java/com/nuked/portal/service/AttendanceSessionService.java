@@ -37,6 +37,18 @@ public class AttendanceSessionService {
         int duration = req.getDurationMinutes() == null ? 15 : Math.max(5, Math.min(180, req.getDurationMinutes()));
         Instant now = Instant.now();
 
+        // Auto-close any still-OPEN sessions for this section before opening
+        // a new one. Stops duplicate live sessions from cluttering students'
+        // portals when faculty re-opens during the same lecture.
+        sessionRepository.findByFacultySectionIdOrderByStartedAtDesc(fs.getId())
+                .stream()
+                .filter(s -> s.getStatus() == AttendanceSession.Status.OPEN)
+                .forEach(s -> {
+                    s.setStatus(AttendanceSession.Status.CLOSED);
+                    s.setClosedAt(now);
+                    sessionRepository.save(s);
+                });
+
         // BLE device name MUST be provided — it's what students will pair to
         // when they Connect Bluetooth. Whatever the teacher's device is
         // currently broadcasting under (laptop name, phone name, beacon name).
@@ -56,6 +68,9 @@ public class AttendanceSessionService {
         s.setStatus(AttendanceSession.Status.OPEN);
         s.setDurationMinutes(duration);
         s.setBleDeviceName(bleName);
+        s.setLatitude(req.getLatitude());
+        s.setLongitude(req.getLongitude());
+        s.setAllowedRadiusMeters(100);
         sessionRepository.save(s);
 
         return toDto(s);

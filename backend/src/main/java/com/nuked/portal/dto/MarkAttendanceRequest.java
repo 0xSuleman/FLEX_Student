@@ -18,4 +18,9 @@ public class MarkAttendanceRequest {
      * rejected (proves the student is in range of the teacher's device).
      */
     private String bleDeviceName;
+
+    /** Student's current lat/long. Cross-checked against the session's
+     *  classroom coords; > radius meters away → rejected. */
+    private Double latitude;
+    private Double longitude;
 }

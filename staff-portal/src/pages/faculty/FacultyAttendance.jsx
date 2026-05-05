@@ -180,12 +180,32 @@ export default function FacultyAttendance() {
       clearToastSoon()
       return
     }
+    // Capture classroom lat/long via the browser's Geolocation API. Stored
+    // on the session so student mark requests are rejected if they're > 100m
+    // away — defeats the "rename a phone at home" cheat.
+    let coords = null
+    try {
+      coords = await new Promise((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error('Geolocation not supported.'))
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        )
+      })
+    } catch (err) {
+      setToast({ kind: 'err', text: 'Location permission required. Allow location in your browser, then retry Open.' })
+      clearToastSoon()
+      return
+    }
     try {
       const res = await api.post('/faculty/attendance/sessions', {
         facultySectionId: parseInt(courseId, 10),
         topic,
         durationMinutes: duration,
         bleDeviceName: cleanedName,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
       })
       const s = res.data
       setBleSession({
@@ -345,6 +365,24 @@ export default function FacultyAttendance() {
       document.body.appendChild(a); a.click(); a.remove()
       URL.revokeObjectURL(url)
       setToast({ kind: 'ok', text: 'Attendance sheet downloaded.' })
+      clearToastSoon()
+    } catch (err) {
+      setToast({ kind: 'err', text: 'Export failed: ' + (err.response?.data?.message || err.message) })
+      clearToastSoon()
+    }
+  }
+
+  const exportSession = async (sessionId) => {
+    try {
+      const res = await api.get(`/faculty/attendance/sessions/${sessionId}/export`, { responseType: 'blob' })
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `attendance-session-${sessionId}.xlsx`
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(url)
+      setToast({ kind: 'ok', text: 'Session sheet downloaded.' })
       clearToastSoon()
     } catch (err) {
       setToast({ kind: 'err', text: 'Export failed: ' + (err.response?.data?.message || err.message) })
@@ -562,21 +600,24 @@ export default function FacultyAttendance() {
               </thead>
               <tbody>
                 {viewSessions.map((s, i) => {
-                  const open = mode === EDIT && editSessionId === s.sessionId
-                  const clickable = mode === EDIT
+                  const open = editSessionId === s.sessionId
                   return (
                     <>
                       <tr key={s.sessionId}
-                        onClick={clickable ? () => openEdit(s.sessionId) : undefined}
-                        className={`border-b border-dashed border-cocoa/30 ${i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'} ${clickable ? 'cursor-pointer hover:bg-tan/40' : ''} ${open ? 'bg-tan/60' : ''}`}>
-                        <td className="px-4 py-2.5 font-extrabold text-ink">{s.lectureNo}</td>
-                        <td className="px-4 py-2.5 text-cocoa font-mono text-xs">{s.date || '—'}</td>
-                        <td className="px-4 py-2.5 text-ink">{s.topic || '—'}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          <span className="tag bg-moss text-cream mr-1">{s.present}</span>
-                          <span className="tag bg-bad text-bone mr-1">{s.absent}</span>
-                          <span className="tag bg-mustard text-ink mr-1">{s.leave}</span>
-                          <span className="tag bg-cocoa text-bone">/{s.total}</span>
+                        onClick={() => openEdit(s.sessionId)}
+                        className={`border-b border-dashed border-cocoa/30 ${i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'} cursor-pointer hover:bg-tan/40 ${open ? 'bg-tan/60' : ''}`}>
+                        <td className="px-4 py-2.5 text-left font-extrabold text-ink w-12">{s.lectureNo}</td>
+                        <td className="px-4 py-2.5 text-left text-cocoa font-mono text-xs w-32">{s.date || '—'}</td>
+                        <td className="px-4 py-2.5 text-left text-ink max-w-[260px] truncate" title={s.topic || ''}>
+                          {s.topic ? (s.topic.length > 30 ? s.topic.slice(0, 30) + '…' : s.topic) : '—'}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center justify-center gap-1.5 tabular-nums">
+                            <span className="tag bg-moss text-cream w-8 text-center">{s.present}</span>
+                            <span className="tag bg-bad text-bone w-8 text-center">{s.absent}</span>
+                            <span className="tag bg-mustard text-ink w-8 text-center">{s.leave}</span>
+                            <span className="tag bg-cocoa text-bone min-w-[2.5rem] text-center">/{s.total}</span>
+                          </div>
                         </td>
                       </tr>
                       {open && (
@@ -584,28 +625,35 @@ export default function FacultyAttendance() {
                           <td colSpan={4} className="p-4">
                             <div className="bg-bone border-2 border-ink rounded-md overflow-hidden">
                               <div className="px-4 py-2 bg-coffee text-bone flex items-center justify-between">
-                                <span className="font-display text-[10px] uppercase tracking-widest">Edit roster — Lecture {s.lectureNo} · {s.date}</span>
+                                <span className="font-display text-[10px] uppercase tracking-widest">{mode === EDIT ? 'Edit roster' : 'Roster'} — Lecture {s.lectureNo} · {s.date}</span>
                                 <div className="flex items-center gap-2">
-                                  <button onClick={() => setEditSessionId(null)} disabled={editSaving}
-                                    className="bg-bone text-ink border-2 border-ink rounded px-2.5 py-1 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">Cancel</button>
-                                  <button onClick={saveEdit} disabled={editSaving}
-                                    className="bg-burn text-bone border-2 border-ink rounded px-2.5 py-1 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1">
-                                    <Save size={11} strokeWidth={3} /> {editSaving ? 'Saving…' : 'Save Changes'}
+                                  <button onClick={() => exportSession(s.sessionId)}
+                                    className="bg-coffee text-bone border-2 border-ink rounded px-2.5 py-1 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1">
+                                    <Download size={11} strokeWidth={3} /> Excel
                                   </button>
+                                  <button onClick={() => setEditSessionId(null)} disabled={editSaving}
+                                    className="bg-bone text-ink border-2 border-ink rounded px-2.5 py-1 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">Close</button>
+                                  {mode === EDIT && (
+                                    <button onClick={saveEdit} disabled={editSaving}
+                                      className="bg-burn text-bone border-2 border-ink rounded px-2.5 py-1 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1">
+                                      <Save size={11} strokeWidth={3} /> {editSaving ? 'Saving…' : 'Save'}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                               <table className="w-full text-sm">
                                 <thead>
                                   <tr className="bg-cream border-b-2 border-ink text-coffee">
-                                    <Th>#</Th><Th>Roll</Th><Th>Name</Th><Th center>Current</Th><Th center>Method</Th><Th center>Mark</Th>
+                                    <Th>#</Th><Th>Roll</Th><Th>Name</Th><Th center>Current</Th><Th center>Method</Th>
+                                    {mode === EDIT && <Th center>Mark</Th>}
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {editRoster.map((r, j) => (
                                     <tr key={r.enrollmentId} className={`border-b border-dashed border-cocoa/30 ${j % 2 === 0 ? 'bg-cream' : 'bg-bone/50'} ${r.dirty ? 'ring-1 ring-burn/40' : ''}`}>
-                                      <td className="px-4 py-2 text-cocoa font-bold text-xs">{j + 1}</td>
-                                      <td className="px-4 py-2 font-extrabold text-ink">{r.roll}</td>
-                                      <td className="px-4 py-2 text-ink">{r.name}</td>
+                                      <td className="px-4 py-2 text-left text-cocoa font-bold text-xs">{j + 1}</td>
+                                      <td className="px-4 py-2 text-left font-extrabold text-ink">{r.roll}</td>
+                                      <td className="px-4 py-2 text-left text-ink">{r.name}</td>
                                       <td className="px-4 py-2 text-center">
                                         {r.status === 'Pending'
                                           ? <span className="inline-block w-6 h-5 border-2 border-dashed border-cocoa/50 rounded" title="unmarked" />
@@ -614,17 +662,19 @@ export default function FacultyAttendance() {
                                       <td className="px-4 py-2 text-center">
                                         <span className={`tag ${r.method === 'Bluetooth' ? 'bg-coffee text-bone' : r.method === 'Manual' ? 'bg-mustard text-ink' : r.method === 'Auto' ? 'bg-cocoa text-bone' : 'bg-bone text-cocoa'}`}>{r.method}</span>
                                       </td>
-                                      <td className="px-4 py-2 text-center">
-                                        <div className="inline-flex gap-1">
-                                          <Btn label="P" active={r.status === 'Present'} tone="moss"    onClick={() => setEditStatus(r.roll, 'Present')} />
-                                          <Btn label="A" active={r.status === 'Absent'}  tone="bad"     onClick={() => setEditStatus(r.roll, 'Absent')} />
-                                          <Btn label="L" active={r.status === 'Leave'}   tone="mustard" onClick={() => setEditStatus(r.roll, 'Leave')} />
-                                        </div>
-                                      </td>
+                                      {mode === EDIT && (
+                                        <td className="px-4 py-2 text-center">
+                                          <div className="inline-flex gap-1">
+                                            <Btn label="P" active={r.status === 'Present'} tone="moss"    onClick={() => setEditStatus(r.roll, 'Present')} />
+                                            <Btn label="A" active={r.status === 'Absent'}  tone="bad"     onClick={() => setEditStatus(r.roll, 'Absent')} />
+                                            <Btn label="L" active={r.status === 'Leave'}   tone="mustard" onClick={() => setEditStatus(r.roll, 'Leave')} />
+                                          </div>
+                                        </td>
+                                      )}
                                     </tr>
                                   ))}
                                   {editRoster.length === 0 && (
-                                    <tr><td colSpan={6} className="px-4 py-6 text-center text-cocoa text-xs font-bold uppercase tracking-wider">No students.</td></tr>
+                                    <tr><td colSpan={mode === EDIT ? 6 : 5} className="px-4 py-6 text-center text-cocoa text-xs font-bold uppercase tracking-wider">No students.</td></tr>
                                   )}
                                 </tbody>
                               </table>

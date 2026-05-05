@@ -21,4 +21,8 @@ public class OpenSessionRequest {
      * request, which is how proximity is verified.
      */
     private String bleDeviceName;
+
+    /** Classroom location captured from the faculty's browser at open-time. */
+    private Double latitude;
+    private Double longitude;
 }

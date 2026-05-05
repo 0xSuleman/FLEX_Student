@@ -66,7 +66,9 @@ public class StudentAttendanceService {
     }
 
     @Transactional
-    public OpenSessionForStudentDTO markPresent(String rollNo, Long sessionId, String reportedBleDeviceName) {
+    public OpenSessionForStudentDTO markPresent(String rollNo, Long sessionId,
+                                                String reportedBleDeviceName,
+                                                Double studentLat, Double studentLon) {
         Student student = studentRepository.findByRollNo(rollNo)
                 .orElseThrow(() -> new AccessDeniedException("Unknown student: " + rollNo));
         AttendanceSession session = sessionRepository.findById(sessionId)
@@ -94,6 +96,24 @@ public class StudentAttendanceService {
             throw new RuntimeException("BLE device mismatch — you connected to '" + reported
                     + "' but this session is bound to '" + expected
                     + "'. Pair with the teacher's device.");
+        }
+
+        // Geolocation gate: student must be within radius of where the teacher
+        // opened the session. Skipped only if the session has no recorded
+        // location (older sessions / faculty denied permission at open-time).
+        if (session.getLatitude() != null && session.getLongitude() != null) {
+            if (studentLat == null || studentLon == null) {
+                throw new RuntimeException("Location is required — allow location access in your browser, then retry.");
+            }
+            int radius = session.getAllowedRadiusMeters() == null ? 100 : session.getAllowedRadiusMeters();
+            double distance = haversineMeters(
+                    session.getLatitude(), session.getLongitude(),
+                    studentLat, studentLon);
+            if (distance > radius) {
+                throw new RuntimeException(String.format(
+                        "You're %.0f m from the classroom (max %d m). Move closer to mark attendance.",
+                        distance, radius));
+            }
         }
 
         // Find the student's enrollment matching this session's course/section/semester
@@ -132,5 +152,17 @@ public class StudentAttendanceService {
                 session.getSessionToken(),
                 true,
                 session.getBleDeviceName());
+    }
+
+    /** Haversine great-circle distance between two lat/long points, in meters. */
+    private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+        double R = 6_371_000;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
 }

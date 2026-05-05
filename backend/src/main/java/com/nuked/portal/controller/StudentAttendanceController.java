@@ -26,6 +26,11 @@ public class StudentAttendanceController {
     @PostMapping("/mark")
     public ResponseEntity<OpenSessionForStudentDTO> mark(Authentication auth,
                                                         @Valid @RequestBody MarkAttendanceRequest req) {
-        return ResponseEntity.ok(service.markPresent(auth.getName(), req.getSessionId(), req.getBleDeviceName()));
+        return ResponseEntity.ok(service.markPresent(
+                auth.getName(),
+                req.getSessionId(),
+                req.getBleDeviceName(),
+                req.getLatitude(),
+                req.getLongitude()));
     }
 }
