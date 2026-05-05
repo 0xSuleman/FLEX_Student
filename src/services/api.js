@@ -1,7 +1,11 @@
 import axios from 'axios'
 
+// Use a relative baseURL so the app works behind a Cloudflare / ngrok HTTPS
+// tunnel and on the LAN. Vite's dev server proxies /api → localhost:8090
+// (see vite.config.js), so requests land on the Spring backend regardless
+// of how the page itself was reached.
 const api = axios.create({
-  baseURL: 'http://localhost:8090/api',
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
   },

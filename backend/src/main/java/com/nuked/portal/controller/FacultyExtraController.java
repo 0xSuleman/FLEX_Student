@@ -30,6 +30,7 @@ public class FacultyExtraController {
     private final EnrollmentRepository enrollmentRepository;
     private final AttendanceSessionRepository attendanceSessionRepository;
     private final AttendanceRepository attendanceRepository;
+    private final AttendanceTemplateRepository attendanceTemplateRepository;
 
     /**
      * Faculty's class schedule. Each row is one section with day/time/room.
@@ -109,6 +110,102 @@ public class FacultyExtraController {
             out.add(m);
         }
         return ResponseEntity.ok(out);
+    }
+
+    /** Faculty uploads Sir's attendance template (xlsx) for a section.
+     *  Stored on the section; reused by every "download today's sheet" call. */
+    @PostMapping(value = "/sections/{sectionId}/attendance/template",
+                 consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> uploadTemplate(Authentication auth,
+                                                              @PathVariable Long sectionId,
+                                                              @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws IOException {
+        FacultySection fs = facultyService.ownedSection(auth.getName(), sectionId);
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Template file is required.");
+        }
+        String name = file.getOriginalFilename() == null ? "template.xlsx" : file.getOriginalFilename();
+        if (!name.toLowerCase().endsWith(".xlsx")) {
+            throw new IllegalArgumentException("Template must be a .xlsx file.");
+        }
+        AttendanceTemplate t = attendanceTemplateRepository.findByFacultySectionId(fs.getId())
+                .orElseGet(AttendanceTemplate::new);
+        t.setFacultySection(fs);
+        t.setFilename(name);
+        t.setFileBytes(file.getBytes());
+        t.setUploadedAt(java.time.LocalDateTime.now());
+        attendanceTemplateRepository.save(t);
+        Map<String, Object> resp = new java.util.LinkedHashMap<>();
+        resp.put("filename", t.getFilename());
+        resp.put("size", t.getFileBytes().length);
+        resp.put("uploadedAt", t.getUploadedAt().toString());
+        return ResponseEntity.ok(resp);
+    }
+
+    /** Tells the UI whether a template is uploaded for this section. */
+    @GetMapping("/sections/{sectionId}/attendance/template")
+    public ResponseEntity<Map<String, Object>> templateStatus(Authentication auth,
+                                                              @PathVariable Long sectionId) {
+        FacultySection fs = facultyService.ownedSection(auth.getName(), sectionId);
+        return attendanceTemplateRepository.findByFacultySectionId(fs.getId())
+                .<ResponseEntity<Map<String, Object>>>map(t -> {
+                    Map<String, Object> resp = new java.util.LinkedHashMap<>();
+                    resp.put("uploaded", true);
+                    resp.put("filename", t.getFilename());
+                    resp.put("size", t.getFileBytes().length);
+                    resp.put("uploadedAt", t.getUploadedAt().toString());
+                    return ResponseEntity.ok(resp);
+                })
+                .orElse(ResponseEntity.ok(Map.of("uploaded", false)));
+    }
+
+    /** Download the template with today's column appended (P/A per student). */
+    @GetMapping("/sections/{sectionId}/attendance/sheet")
+    public ResponseEntity<byte[]> downloadFilledSheet(Authentication auth,
+                                                      @PathVariable Long sectionId,
+                                                      @RequestParam(required = false) String date) throws IOException {
+        FacultySection fs = facultyService.ownedSection(auth.getName(), sectionId);
+        AttendanceTemplate t = attendanceTemplateRepository.findByFacultySectionId(fs.getId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "No template uploaded for this section yet. Click 'Upload Template' first."));
+
+        java.time.LocalDate lectureDate = (date == null || date.isBlank())
+                ? java.time.LocalDate.now()
+                : java.time.LocalDate.parse(date);
+
+        // For every student in the section, decide P/A based on whether they
+        // have any P-marked attendance row tied to a session of this section
+        // on the given date.
+        java.util.List<Enrollment> enrolled = enrollmentRepository.findByCourseIdAndSectionAndSemester(
+                fs.getCourse().getId(), fs.getSection(), fs.getSemester());
+        java.util.List<AttendanceSession> sessionsToday = attendanceSessionRepository
+                .findByFacultySectionIdOrderByStartedAtDesc(fs.getId()).stream()
+                .filter(s -> lectureDate.equals(s.getLectureDate()))
+                .toList();
+
+        java.util.Set<Long> presentEnrollmentIds = new java.util.HashSet<>();
+        for (AttendanceSession s : sessionsToday) {
+            for (Attendance a : attendanceRepository.findBySessionId(s.getId())) {
+                if ("P".equals(a.getPresence()) && a.getEnrollment() != null) {
+                    presentEnrollmentIds.add(a.getEnrollment().getId());
+                }
+            }
+        }
+
+        java.util.Map<String, String> presenceByRoll = new java.util.HashMap<>();
+        for (Enrollment e : enrolled) {
+            if (e.getStudent() == null) continue;
+            presenceByRoll.put(e.getStudent().getRollNo(),
+                    presentEnrollmentIds.contains(e.getId()) ? "P" : "A");
+        }
+
+        byte[] filled = com.nuked.portal.excel.AttendanceTemplateFiller.fill(
+                t.getFileBytes(), lectureDate, presenceByRoll);
+        String filename = "attendance-" + fs.getCourse().getCode() + "-" + fs.getSection()
+                + "-" + lectureDate.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy")) + ".xlsx";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(filled);
     }
 
     /** Per-session attendance xlsx — just that one lecture's roster. */

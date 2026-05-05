@@ -198,26 +198,42 @@ public class DataInitializer implements CommandLineRunner {
         // STUDENT DATA ARRAYS
         // ===================================================================
 
+        // Roster sourced from Sir Zeeshan's AttendanceSheet — full BSE-243A
+        // section (41 students). All enrolled in CS3001 under Zeeshan.
         String[] rollNumbers = {
-                "24L-3072", "24L-3073", "24L-3074", "24L-3075", "24L-3076",
-                "24L-3077", "24L-3078", "24L-3079", "24L-3080", "24L-3081",
-                "24L-3082", "24L-3083", "24L-3084", "24L-3085", "24L-3086",
-                "24L-3087", "24L-3088", "24L-3089", "24L-3090", "24L-3091"
+                "23L-3007", "23L-3077", "23L-3094", "23L-3097", "23L-3102",
+                "24I-3023", "24I-3078", "24L-2551", "24L-3003", "24L-3008",
+                "24L-3010", "24L-3011", "24L-3012", "24L-3018", "24L-3027",
+                "24L-3031", "24L-3034", "24L-3035", "24L-3036", "24L-3037",
+                "24L-3049", "24L-3050", "24L-3051", "24L-3052", "24L-3054",
+                "24L-3057", "24L-3060", "24L-3061", "24L-3067", "24L-3068",
+                "24L-3072", "24L-3078", "24L-3079", "24L-3081", "24L-3083",
+                "24L-3088", "24L-3089", "24L-3090", "24L-3093", "24L-3096",
+                "24L-3097"
         };
 
         String[] names = {
-                "Suleman Ahmed", "Ahmad Hassan", "Fatima Zahra", "Muhammad Ali", "Ayesha Khan",
-                "Usman Tariq", "Zainab Malik", "Bilal Asghar", "Hira Nawaz", "Shahzaib Saeed",
-                "Maryam Iqbal", "Hassan Raza", "Sana Javed", "Omar Farooq", "Nimra Sheikh",
-                "Talha Mehmood", "Amina Bibi", "Hamza Siddiqui", "Rabia Noor", "Danish Ahmed"
+                "Muhammad Abdullah Haider", "Muhammad Manan", "Muhammad Ahmad", "Abdul Muiz", "Muhammad Hassan",
+                "Ali Saad", "Muhammad Umar Ashraf", "Hamna Faisal", "Adina Saqib", "Eman Fatima",
+                "Ahmad Abrar", "Muhammad Moiz Dil", "Abdul Moez", "Muhammad Talha Hamid", "Fatima Kamran",
+                "Ahmed Akhtar", "Muhammad Hammad Mushtaq", "Muhammad Waleed", "Bilal Kashif", "Mahrukh Rehman",
+                "Ahmad Ali Khan", "Saad Mehmood Athar", "Mustafa Salman Ahmed", "Ramsha Khalid", "Muhammad Hanzala Siddique",
+                "Muhammad Shahzaib Zia", "Muhammad Moeed Amir", "Abdullah Tahir", "Sheikh Muhammad Ammar Arif", "Zuhar Faisal",
+                "Suleman Ahmed", "Zainab Sharif", "Maryam Bint E Ashfaq", "Shahzaib Saeed", "Areeba Iqbal",
+                "Kashif Abbas", "Asadullah Nasir", "Bilal Ahmad", "Rabia", "Anoosha Rizwan Vohra",
+                "Manumha Nadeem"
         };
 
-        String[] genders = {
-                "Male", "Male", "Female", "Male", "Female",
-                "Male", "Female", "Male", "Female", "Male",
-                "Female", "Male", "Female", "Male", "Female",
-                "Male", "Female", "Male", "Female", "Male"
-        };
+        // Gender by name pattern — female names from Sir's roster
+        String[] genders = new String[rollNumbers.length];
+        java.util.Set<String> femaleIdx = java.util.Set.of(
+                "Hamna Faisal", "Adina Saqib", "Eman Fatima", "Fatima Kamran", "Mahrukh Rehman",
+                "Ramsha Khalid", "Zainab Sharif", "Maryam Bint E Ashfaq", "Areeba Iqbal", "Rabia",
+                "Anoosha Rizwan Vohra", "Manumha Nadeem"
+        );
+        for (int g = 0; g < names.length; g++) {
+            genders[g] = femaleIdx.contains(names[g]) ? "Female" : "Male";
+        }
 
         String[] fatherNames = {
                 "Muhammad Saeed", "Hassan Nawaz", "Zaheer Abbas", "Ali Raza", "Imran Khan",
@@ -262,56 +278,53 @@ public class DataInitializer implements CommandLineRunner {
         String[] bloodGroups = {"O+", "A+", "B+", "AB+", "O-", "A-", "B+", "O+", "A+", "B+",
                 "AB-", "O+", "A+", "B-", "O+", "A+", "B+", "AB+", "O-", "A+"};
 
-        // Degree assignments: 0-9 BS(SE), 10-14 BS(CS), 15-19 BS(AI)
-        String[] degrees = {
-                "BS(SE)", "BS(SE)", "BS(SE)", "BS(SE)", "BS(SE)",
-                "BS(SE)", "BS(SE)", "BS(SE)", "BS(SE)", "BS(SE)",
-                "BS(CS)", "BS(CS)", "BS(CS)", "BS(CS)", "BS(CS)",
-                "BS(AI)", "BS(AI)", "BS(AI)", "BS(AI)", "BS(AI)"
-        };
-
-        // Section assignments: 0-9 A (incl. Shahzaib at idx 9), 10-14 B, 15-19 C
-        String[] sections = new String[20];
-        for (int i = 0; i < 20; i++) {
-            if (i <= 9)       sections[i] = "BSE-243A";
-            else if (i <= 14) sections[i] = "BSE-243B";
-            else              sections[i] = "BSE-243C";
+        // All 41 students enrolled in BS(SE), Sir Zeeshan's BSE-243A.
+        String[] degrees = new String[rollNumbers.length];
+        String[] sections = new String[rollNumbers.length];
+        for (int i = 0; i < rollNumbers.length; i++) {
+            degrees[i] = "BS(SE)";
+            sections[i] = "BSE-243A";
         }
 
-        // Encoded passwords (first student different)
+        // Encoded passwords
         String encodedPassword123 = passwordEncoder.encode("password123");
         String encodedStudent123 = passwordEncoder.encode("student123");
 
         // ===================================================================
-        // LOOP OVER 20 STUDENTS
+        // LOOP OVER ALL STUDENTS
         // ===================================================================
 
-        for (int s = 0; s < 20; s++) {
+        for (int s = 0; s < rollNumbers.length; s++) {
             String rollNo = rollNumbers[s];
             // 24L-3072 (Suleman) and 24L-3081 (Shahzaib) get password123;
             // everyone else gets student123.
-            String password = (s == 0 || s == 9) ? encodedPassword123 : encodedStudent123;
+            String password = ("24L-3072".equals(rollNo) || "24L-3081".equals(rollNo))
+                    ? encodedPassword123 : encodedStudent123;
             String section = sections[s];
             String degree = degrees[s];
+
+            // Helper: wrap-around for short auxiliary arrays (20 entries) when
+            // we have 41 students — recycles values rather than crashing.
+            int aux = s % bloodGroups.length;
 
             // --- Student ---
             Student student = createStudent(
                     rollNo, password, names[s], genders[s],
                     names[s].toLowerCase().replace(" ", ".") + "@nu.edu.pk",
                     LocalDate.of(2005, 1 + (s % 12), 1 + (s % 28)),
-                    String.format("35202-%07d-%d", 1000000 + s * 111111, (s % 2 == 0) ? 7 : 2),
+                    String.format("35202-XXXXXXX-X"),
                     String.format("03%d-%07d", 10 + (s % 6), 1000000 + s * 123456),
-                    bloodGroups[s], section, degree
+                    bloodGroups[aux], section, degree
             );
 
             // --- Family Info ---
-            createFamilyInfo(student, "Father", fatherNames[s],
-                    String.format("35202-%07d-%d", 2000000 + s * 111111, 1));
-            createFamilyInfo(student, "Mother", motherNames[s],
-                    String.format("35202-%07d-%d", 3000000 + s * 111111, 2));
+            createFamilyInfo(student, "Father", fatherNames[aux],
+                    String.format("35202-XXXXXXX-X"));
+            createFamilyInfo(student, "Mother", motherNames[aux],
+                    String.format("35202-XXXXXXX-X"));
 
             // --- Contact Info ---
-            createContactInfo(student, addresses[s], cities[s], postalCodes[s],
+            createContactInfo(student, addresses[aux], cities[aux], postalCodes[aux],
                     String.format("042-%08d", 30000000 + s * 100000),
                     String.format("03%d-%07d", 11 + (s % 5), 2000000 + s * 654321));
 

@@ -198,7 +198,7 @@ export default function LiveAttendanceWidget() {
 
   return (
     <div className="space-y-3">
-      <div className={`chunky-card p-3 flex items-center gap-3 ${showMismatchWarning ? 'bg-bad/15 border-bad' : bleConnected ? 'bg-moss/15 border-moss' : 'bg-cream'}`}>
+      <div className={`chunky-card p-3 flex flex-wrap items-center gap-3 ${showMismatchWarning ? 'bg-bad/15 border-bad' : bleConnected ? 'bg-moss/15 border-moss' : 'bg-cream'}`}>
         <div className={`w-10 h-10 border-2 border-ink shadow-pixel-sm rounded-md flex items-center justify-center shrink-0 ${showMismatchWarning ? 'bg-bad' : bleConnected ? 'bg-moss' : 'bg-cocoa'}`}>
           {bleConnected
             ? <BluetoothConnected size={16} className="text-cream" strokeWidth={2.8} />

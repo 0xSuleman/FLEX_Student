@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Bluetooth, Play, Square, Save, Clock, Eye, Hand, X,
   Users, CheckCircle2, XCircle, Coffee, Search, AlertTriangle,
-  ListChecks, RefreshCw, Download,
+  ListChecks, RefreshCw, Download, Upload,
 } from 'lucide-react'
 import api from '../../services/api'
 import { PageHeader, SectionCard, ActionButton, StatCard } from '../../components/PageShell'
@@ -45,6 +45,10 @@ export default function FacultyAttendance() {
   const [editSessionId, setEditSessionId] = useState(null)
   const [editRoster, setEditRoster] = useState([])
   const [editSaving, setEditSaving] = useState(false)
+  // Sir's attendance-sheet template upload state.
+  const [templateStatus, setTemplateStatus] = useState(null)
+  const [templateUploading, setTemplateUploading] = useState(false)
+  const templateInputRef = useRef(null)
   const tickRef = useRef(null)
   const pollRef = useRef(null)
 
@@ -84,6 +88,58 @@ export default function FacultyAttendance() {
   useEffect(() => {
     if (courseId) loadRoster()
   }, [courseId])
+
+  const loadTemplateStatus = async () => {
+    if (!courseId) { setTemplateStatus(null); return }
+    try {
+      const res = await api.get(`/faculty/sections/${courseId}/attendance/template`)
+      setTemplateStatus(res.data || null)
+    } catch { setTemplateStatus(null) }
+  }
+  useEffect(() => { loadTemplateStatus() }, [courseId])
+
+  const uploadTemplate = async (file) => {
+    if (!file || !courseId) return
+    setTemplateUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await api.post(`/faculty/sections/${courseId}/attendance/template`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setTemplateStatus({ uploaded: true, ...res.data })
+      setToast({ kind: 'ok', text: `Template uploaded · ${res.data.filename}` })
+    } catch (err) {
+      setToast({ kind: 'err', text: 'Upload failed: ' + (err.response?.data?.message || err.message) })
+    } finally {
+      setTemplateUploading(false)
+      if (templateInputRef.current) templateInputRef.current.value = ''
+      clearToastSoon()
+    }
+  }
+
+  const downloadFilledSheet = async () => {
+    if (!courseId) return
+    try {
+      const res = await api.get(`/faculty/sections/${courseId}/attendance/sheet`, { responseType: 'blob' })
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const today = new Date().toISOString().slice(0, 10)
+      a.download = `attendance-${today}.xlsx`
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(url)
+      setToast({ kind: 'ok', text: "Today's attendance sheet downloaded." })
+      clearToastSoon()
+    } catch (err) {
+      const msg = err.response?.data instanceof Blob
+        ? "Download failed — make sure a template is uploaded."
+        : ('Download failed: ' + (err.response?.data?.message || err.message))
+      setToast({ kind: 'err', text: msg })
+      clearToastSoon()
+    }
+  }
 
   // ── BLE polling — replaces the old fake client simulator ──
   // Polls real backend every 2s for any student who has self-marked through their
@@ -424,11 +480,23 @@ export default function FacultyAttendance() {
               {courses.map(c => <option key={c.id} value={c.id}>{c.courseCode} · {c.section}</option>)}
             </select>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 flex-wrap">
+            <input ref={templateInputRef} type="file" accept=".xlsx" className="hidden"
+              onChange={(e) => uploadTemplate(e.target.files?.[0])} />
+            <button onClick={() => templateInputRef.current?.click()} disabled={!courseId || templateUploading}
+              title="Upload Sir's attendance sheet template (xlsx)"
+              className="bg-mustard text-ink border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
+              <Upload size={11} strokeWidth={3} /> {templateUploading ? 'Uploading…' : (templateStatus?.uploaded ? 'Replace Template' : 'Upload Template')}
+            </button>
+            <button onClick={downloadFilledSheet} disabled={!courseId || !templateStatus?.uploaded}
+              title="Download the template with today's P/A column filled in"
+              className="bg-burn text-bone border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
+              <Download size={11} strokeWidth={3} /> Today's Sheet
+            </button>
             <button onClick={exportExcel} disabled={!courseId}
-              title="Download per-section attendance sheet (xlsx)"
+              title="Download per-section attendance overview (xlsx)"
               className="bg-coffee text-bone border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
-              <Download size={11} strokeWidth={3} /> Excel
+              <Download size={11} strokeWidth={3} /> Overview
             </button>
             <ModeBadge mode={mode} bleSupported={bleSupported} />
           </div>

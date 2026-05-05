@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
   Home, BookOpen, User, Wallet, MessageSquare,
-  LogOut, Search, Bell, Zap,
+  LogOut, Search, Bell, Zap, Menu, X,
   Target, Award, BookMarked, Receipt, FilePen,
   RotateCcw, FileX, Layers, ClipboardList, Radar, Cpu,
 } from 'lucide-react'
@@ -58,6 +58,7 @@ export default function Layout() {
   const [search, setSearch] = useState('')
   const [showNotifs, setShowNotifs] = useState(false)
   const [notifs, setNotifs] = useState(NOTIFICATIONS)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const notifRef = useRef(null)
   const navigate = useNavigate()
   const location = useLocation()
@@ -130,15 +131,74 @@ export default function Layout() {
           </nav>
         </aside>
 
+        {/* MOBILE NAV DRAWER (lg:hidden) */}
+        {mobileNavOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <div className="absolute inset-0 bg-ink/70" onClick={() => setMobileNavOpen(false)} />
+            <aside className="relative w-72 max-w-[80vw] h-full bg-cocoa border-r-2 border-ink flex flex-col text-bone">
+              <div className="px-4 py-4 border-b-2 border-ink bg-coffee/40 flex items-center justify-between">
+                <NavLink to="/" onClick={() => setMobileNavOpen(false)} className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-coffee border-2 border-ink shadow-pixel-sm rounded-md flex items-center justify-center">
+                    <Zap size={18} className="text-bone" strokeWidth={2.8} />
+                  </div>
+                  <div>
+                    <div className="font-display text-base text-bone leading-none">NUKED</div>
+                    <div className="text-[10px] text-tan mt-1">v1.0.90</div>
+                  </div>
+                </NavLink>
+                <button onClick={() => setMobileNavOpen(false)} className="bg-coffee/60 border-2 border-ink rounded-md p-1.5">
+                  <X size={16} className="text-bone" />
+                </button>
+              </div>
+              <div className="px-4 py-4 border-b-2 border-ink text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-coffee border-2 border-ink shadow-pixel rounded-md font-black text-2xl text-bone mb-2">
+                  {STUDENT.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+                <div className="font-extrabold text-sm uppercase tracking-wider text-bone leading-tight">{STUDENT.name}</div>
+                <div className="text-[10px] text-tan mt-0.5">{STUDENT.rollNo} · {STUDENT.section}</div>
+              </div>
+              <nav className="px-3 py-3 flex-1 space-y-1 overflow-y-auto">
+                {NAV.map((group, gi) => (
+                  <div key={gi}>
+                    {group.group && <SectionLabel>{group.group}</SectionLabel>}
+                    {group.items.map((item) => {
+                      const Icon = item.icon
+                      return (
+                        <NavLink key={item.to} to={item.to}
+                          onClick={() => setMobileNavOpen(false)}
+                          className={({ isActive }) =>
+                            `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-bold uppercase tracking-wider transition-all ${
+                              isActive ? 'bg-coffee text-bone shadow-pixel-sm' : 'text-tan hover:bg-coffee/40'
+                            }`
+                          }>
+                          <Icon size={16} strokeWidth={2.5} /> {item.label}
+                        </NavLink>
+                      )
+                    })}
+                  </div>
+                ))}
+                <button onClick={() => { logout(); navigate('/login') }}
+                  className="w-full mt-3 flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-bold uppercase tracking-wider text-bad hover:bg-bad/15 transition-all">
+                  <LogOut size={16} strokeWidth={2.5} /> Sign Out
+                </button>
+              </nav>
+            </aside>
+          </div>
+        )}
+
         {/* MAIN */}
         <main className="flex-1 min-w-0 flex flex-col">
           {/* breadcrumb */}
-          <div className="border-b-2 border-ink bg-cocoa px-6 py-3.5 flex items-center justify-between gap-4 sticky top-0 z-30">
-            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider">
-              <Cpu size={16} className="text-burnL" />
+          <div className="border-b-2 border-ink bg-cocoa px-4 md:px-6 py-3.5 flex items-center justify-between gap-3 sticky top-0 z-30">
+            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider min-w-0">
+              <button onClick={() => setMobileNavOpen(true)}
+                className="lg:hidden bg-coffee/60 border-2 border-ink rounded-md p-1.5 shadow-pixel-sm">
+                <Menu size={16} className="text-bone" />
+              </button>
+              <Cpu size={16} className="text-burnL hidden md:inline" />
               <NavLink to="/" className="text-tan hover:text-bone transition-colors">Home</NavLink>
               <span className="text-tan/50">/</span>
-              <span className="text-bone">{currentPage}</span>
+              <span className="text-bone truncate">{currentPage}</span>
             </div>
             <div className="flex items-center gap-3 relative">
               <div className="hidden md:flex items-center gap-2 bg-coffee/60 border-2 border-ink rounded-md px-3 py-1.5 w-72">
