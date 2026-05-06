@@ -283,8 +283,53 @@ export default function FacultyAttendance() {
     if (!courseId) return
     setMode(MANUAL)
     setBleSession(null)
+    setTopic('')
     // Default everyone to Present in Manual; faculty just unchecks absentees.
     loadRoster('Present', 'Manual')
+  }
+
+  // Manual mode is one-shot: open a session + commit marks in a single click.
+  // No live PIN window, no countdown — faculty just sets everyone's status
+  // and hits Save. Topic is required so Sir's record always has a name.
+  const saveManualAttendance = async () => {
+    const cleanTopic = (topic || '').trim()
+    if (!cleanTopic) {
+      setToast({ kind: 'err', text: 'Topic is required before you can save manual attendance.' })
+      clearToastSoon()
+      return
+    }
+    if (!courseId) return
+    setSaving(true)
+    try {
+      // Open the session (backend always generates a PIN; we just don't use it).
+      const open = await api.post('/faculty/attendance/sessions', {
+        facultySectionId: parseInt(courseId, 10),
+        topic: cleanTopic,
+        durationMinutes: 5,  // tiny window; we close it immediately below
+      })
+      const sessionId = open.data.id
+      // Build marks: anything still Pending falls through to backend's Auto/Absent rule.
+      const finalRoster = roster.map(r => r.status === 'Pending' ? { ...r, status: 'Absent', method: 'Auto' } : r)
+      await api.post(`/faculty/attendance/sessions/${sessionId}/close`, {
+        marks: finalRoster.map(r => ({
+          enrollmentId: r.enrollmentId,
+          presence: PRESENCE_CODE[r.status] || 'A',
+          method: r.method && r.method !== '—' ? r.method : 'Manual',
+        })),
+      })
+      const present = finalRoster.filter(r => r.status === 'Present').length
+      const absent  = finalRoster.filter(r => r.status === 'Absent').length
+      const late    = finalRoster.filter(r => r.status === 'Late' || r.status === 'Leave').length
+      setToast({ kind: 'ok', text: `Manual attendance saved · ${present} P / ${absent} A / ${late} L` })
+      setMode(IDLE)
+      setBleSession(null)
+      setTopic('')
+    } catch (err) {
+      setToast({ kind: 'err', text: 'Save failed: ' + (err.response?.data?.message || err.message) })
+    } finally {
+      setSaving(false)
+      clearToastSoon()
+    }
   }
 
   // Toggle a status on a roster row. If the same status is already active
@@ -602,21 +647,17 @@ export default function FacultyAttendance() {
           </div>
         )}
 
-        {(mode === BLE || mode === MANUAL) && !bleSession && (
+        {mode === BLE && !bleSession && (
           <div className="p-5 grid grid-cols-1 md:grid-cols-12 gap-4">
-            <Field className={mode === MANUAL ? 'md:col-span-12' : 'md:col-span-8'} label="Lecture Topic">
+            <Field className="md:col-span-8" label="Lecture Topic">
               <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Iterative & Incremental Models"
                 className="w-full bg-bone border-2 border-ink rounded-md px-3 py-2 font-mono text-sm text-ink focus:outline-none" />
             </Field>
-            {mode === BLE && (
-              <Field className="md:col-span-4" label={`Duration · ${duration >= 60 ? `${(duration / 60).toFixed(duration % 60 ? 1 : 0)} hr` : `${duration} min`}`}>
-                <input type="range" min="5" max="180" step="5" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full accent-ink" />
-              </Field>
-            )}
+            <Field className="md:col-span-4" label={`Duration · ${duration >= 60 ? `${(duration / 60).toFixed(duration % 60 ? 1 : 0)} hr` : `${duration} min`}`}>
+              <input type="range" min="5" max="180" step="5" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full accent-ink" />
+            </Field>
             <div className="md:col-span-12 text-[11px] font-bold text-cocoa">
-              {mode === MANUAL
-                ? 'Manual mode — every student starts as Present. Click P / A / L on any row to change. Click an already-active button to un-mark it. Close & Save to commit.'
-                : 'A 6-digit PIN is generated when you click Open. Announce or project it; students enter the PIN + their location is checked against the classroom.'}
+              A 6-digit PIN is generated when you click Open. Announce or project it; students enter the PIN + their location is checked against the classroom.
             </div>
             <div className="md:col-span-12 flex justify-end gap-2">
               <ActionButton tone="bone" Icon={X} onClick={cancelMode}>Back</ActionButton>
@@ -625,7 +666,25 @@ export default function FacultyAttendance() {
           </div>
         )}
 
-        {(mode === BLE || mode === MANUAL) && bleSession && (
+        {mode === MANUAL && (
+          <div className="p-5 grid grid-cols-1 md:grid-cols-12 gap-3">
+            <Field className="md:col-span-8" label="Lecture Topic (required)">
+              <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Iterative & Incremental Models"
+                className={`w-full bg-bone border-2 rounded-md px-3 py-2 font-mono text-sm text-ink focus:outline-none ${!topic.trim() ? 'border-bad' : 'border-ink'}`} />
+            </Field>
+            <div className="md:col-span-4 flex items-end gap-2 justify-end">
+              <ActionButton tone="bone" Icon={X} onClick={cancelMode} disabled={saving}>Close</ActionButton>
+              <ActionButton tone="cocoa" Icon={Save} onClick={saveManualAttendance} disabled={saving || !topic.trim()}>
+                {saving ? 'Saving…' : 'Save'}
+              </ActionButton>
+            </div>
+            <div className="md:col-span-12 text-[11px] font-bold text-cocoa">
+              Every student starts as <span className="text-moss">Present</span>. Click <span className="text-bad">A</span> to mark Absent, <span className="text-mustard">L</span> for Late, or click an already-active button to un-mark. <span className="font-extrabold">Close</span> discards changes; <span className="font-extrabold">Save</span> commits — topic must be set first.
+            </div>
+          </div>
+        )}
+
+        {mode === BLE && bleSession && (
           <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-12 gap-4">
             <div className="md:col-span-7 bg-cream border-2 border-ink rounded-md px-3 py-2.5">
               <div className="text-[10px] font-extrabold text-coffee uppercase tracking-widest">&gt; Topic</div>
