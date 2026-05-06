@@ -35,7 +35,8 @@ public class StudentAttendanceController {
                 req.getLatitude(),
                 req.getLongitude(),
                 req.getDeviceUuid(),
-                resolveClientIp(http)));
+                resolveClientIp(http),
+                req.getClientFingerprint()));
     }
 
     /**

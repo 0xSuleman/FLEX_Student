@@ -26,6 +26,26 @@ function getOrCreateDeviceUuid() {
   }
 }
 
+// Cross-browser device signature: stable signals that don't change when the
+// student switches Safari → Chrome → Bluefy on the same physical device.
+// We deliberately exclude User-Agent (browser-dependent) and instead rely on
+// screen geometry + locale + timezone which the OS controls. Two students
+// with identical phone models can collide — the backend treats this as a
+// faculty review flag, never an auto-reject.
+function getClientFingerprint() {
+  try {
+    const w = (window.screen && window.screen.width) || 0
+    const h = (window.screen && window.screen.height) || 0
+    const ratio = window.devicePixelRatio || 1
+    const lang = (navigator.languages && navigator.languages[0]) || navigator.language || ''
+    let tz = ''
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '' } catch {}
+    return `${w}x${h}@${ratio}|${lang}|${tz}`
+  } catch {
+    return null
+  }
+}
+
 export default function LiveAttendanceWidget() {
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -114,6 +134,7 @@ export default function LiveAttendanceWidget() {
         latitude: coords.latitude,
         longitude: coords.longitude,
         deviceUuid: getOrCreateDeviceUuid(),
+        clientFingerprint: getClientFingerprint(),
       })
       setToast({ kind: 'ok', text: `Present marked for ${s.courseCode} · ${s.section}.` })
       setPinInputs(prev => ({ ...prev, [s.sessionId]: '' }))

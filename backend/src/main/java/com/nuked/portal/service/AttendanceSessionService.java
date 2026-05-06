@@ -104,6 +104,7 @@ public class AttendanceSessionService {
             String method = marked.map(Attendance::getMethod).orElse(null);
             String deviceUuid = marked.map(Attendance::getDeviceUuid).orElse(null);
             String clientIp = marked.map(Attendance::getClientIp).orElse(null);
+            String clientFingerprint = marked.map(Attendance::getClientFingerprint).orElse(null);
             out.add(new SessionMarkDTO(
                     e.getId(),
                     e.getStudent().getRollNo(),
@@ -112,7 +113,8 @@ public class AttendanceSessionService {
                     method,
                     null,
                     deviceUuid,
-                    clientIp));
+                    clientIp,
+                    clientFingerprint));
         }
         return out;
     }

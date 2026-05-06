@@ -79,7 +79,8 @@ public class StudentAttendanceService {
     public OpenSessionForStudentDTO markPresent(String rollNo, Long sessionId,
                                                 String reportedPinCode,
                                                 Double studentLat, Double studentLon,
-                                                String deviceUuid, String clientIp) {
+                                                String deviceUuid, String clientIp,
+                                                String clientFingerprint) {
         Student student = studentRepository.findByRollNo(rollNo)
                 .orElseThrow(() -> new AccessDeniedException(
                         "Your account isn't registered. Sign out and sign back in — if it still fails, ask your faculty to check your enrollment."));
@@ -170,6 +171,7 @@ public class StudentAttendanceService {
             a.setSessionId(sessionId);
             a.setDeviceUuid(deviceUuid);
             a.setClientIp(clientIp);
+            a.setClientFingerprint(clientFingerprint);
             attendanceRepository.save(a);
         }
 

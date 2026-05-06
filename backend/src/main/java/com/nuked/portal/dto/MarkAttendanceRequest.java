@@ -31,4 +31,11 @@ public class MarkAttendanceRequest {
      * cannot mark for two different enrollments in the same session.
      */
     private String deviceUuid;
+
+    /**
+     * Stable-across-browsers device signature (screen + language + timezone).
+     * Faculty-side flag only — never used for auto-reject because two students
+     * with identical phone models would collide.
+     */
+    private String clientFingerprint;
 }

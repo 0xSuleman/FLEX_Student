@@ -94,6 +94,39 @@ export default function FacultyAttendance() {
   }
   useEffect(() => { loadTemplateStatus() }, [courseId])
 
+  // On mount / section change: if there's still an OPEN session for this
+  // section, restore the live session card so a page refresh doesn't make
+  // the live PIN window vanish from the faculty view. We pick the most
+  // recent open + unexpired one (matches the student-side dedupe).
+  useEffect(() => {
+    if (!courseId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await api.get(`/faculty/sections/${courseId}/attendance/sessions`)
+        const arr = Array.isArray(res.data) ? res.data : []
+        const now = Date.now()
+        const live = arr
+          .filter(s => s.status === 'OPEN' && new Date(s.endsAt).getTime() > now)
+          .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0]
+        if (cancelled || !live) return
+        setBleSession({
+          id: live.id,
+          sessionToken: live.sessionToken,
+          pinCode: live.pinCode,
+          startedAt: new Date(live.startedAt).getTime(),
+          endsAt: new Date(live.endsAt).getTime(),
+        })
+        setTopic(live.topic || '')
+        setDuration(live.durationMinutes || 30)
+        setNow(Date.now())
+        setMode(BLE)
+        loadRoster('Pending', '—')
+      } catch { /* no live session — leave UI alone */ }
+    })()
+    return () => { cancelled = true }
+  }, [courseId])
+
   const uploadTemplate = async (file) => {
     if (!file || !courseId) return
     setTemplateUploading(true)
@@ -155,7 +188,7 @@ export default function FacultyAttendance() {
           const status = live.presence === 'P' ? 'Present'
                        : live.presence === 'A' ? 'Absent'
                        : live.presence === 'L' ? 'Leave' : r.status
-          return { ...r, status, method: live.method || 'PIN', deviceUuid: live.deviceUuid, clientIp: live.clientIp }
+          return { ...r, status, method: live.method || 'PIN', deviceUuid: live.deviceUuid, clientIp: live.clientIp, clientFingerprint: live.clientFingerprint }
         }))
       } catch { /* keep last good */ }
     }, 2000)
@@ -191,6 +224,18 @@ export default function FacultyAttendance() {
     const m = {}
     for (const r of roster) {
       if (r.deviceUuid) m[r.deviceUuid] = (m[r.deviceUuid] || 0) + 1
+    }
+    return m
+  }, [roster])
+
+  // Cross-browser fingerprint counts. A collision here = different localStorage
+  // UUIDs but identical screen+lang+tz signature → either same phone via
+  // different browsers (probable cheat) or two students with identical phones
+  // (legitimate). Surfaced as a yellow review flag, never auto-rejected.
+  const fingerprintCounts = useMemo(() => {
+    const m = {}
+    for (const r of roster) {
+      if (r.clientFingerprint) m[r.clientFingerprint] = (m[r.clientFingerprint] || 0) + 1
     }
     return m
   }, [roster])
@@ -611,8 +656,10 @@ export default function FacultyAttendance() {
             <tbody>
               {filtered.map((r, i) => {
                 const dupDevice = r.deviceUuid && deviceCounts[r.deviceUuid] > 1
+                const dupFingerprint = !dupDevice && r.clientFingerprint && fingerprintCounts[r.clientFingerprint] > 1
+                const rowBg = dupDevice ? 'bg-bad/10' : dupFingerprint ? 'bg-mustard/15' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
                 return (
-                <tr key={r.enrollmentId || r.roll} className={`border-b border-dashed border-cocoa/30 ${dupDevice ? 'bg-bad/10' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'}`}>
+                <tr key={r.enrollmentId || r.roll} className={`border-b border-dashed border-cocoa/30 ${rowBg}`}>
                   <td className="px-4 py-2.5 text-cocoa font-bold text-xs">{i + 1}</td>
                   <td className="px-4 py-2.5 font-extrabold text-ink">{r.roll}</td>
                   <td className="px-4 py-2.5 text-ink">{r.name}</td>
@@ -626,8 +673,14 @@ export default function FacultyAttendance() {
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     {r.deviceUuid
-                      ? <span className={`tag font-mono ${dupDevice ? 'bg-bad text-bone animate-blink' : 'bg-bone text-cocoa'}`} title={dupDevice ? `Same device used by ${deviceCounts[r.deviceUuid]} students — possible cheating` : `Device ${r.deviceUuid}${r.clientIp ? ` · IP ${r.clientIp}` : ''}`}>
-                          {dupDevice ? '⚠ ' : ''}…{r.deviceUuid.slice(-4)}
+                      ? <span className={`tag font-mono ${dupDevice ? 'bg-bad text-bone animate-blink' : dupFingerprint ? 'bg-mustard text-ink' : 'bg-bone text-cocoa'}`} title={
+                          dupDevice
+                            ? `Same browser device used by ${deviceCounts[r.deviceUuid]} students — log-out + log-in cheat`
+                            : dupFingerprint
+                              ? `Same phone signature as ${fingerprintCounts[r.clientFingerprint]} students — could be same phone via different browsers, or identical phone models. Verify with the student.`
+                              : `Device ${r.deviceUuid}${r.clientIp ? ` · IP ${r.clientIp}` : ''}${r.clientFingerprint ? ` · ${r.clientFingerprint}` : ''}`
+                        }>
+                          {dupDevice ? '⚠ ' : dupFingerprint ? '⚑ ' : ''}…{r.deviceUuid.slice(-4)}
                         </span>
                       : <span className="text-cocoa/40 text-xs">—</span>}
                   </td>

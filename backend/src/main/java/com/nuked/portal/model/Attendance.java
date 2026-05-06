@@ -54,4 +54,16 @@ public class Attendance {
      */
     @Column(name = "client_ip", length = 64)
     private String clientIp;
+
+    /**
+     * Cross-browser device signature: screen dimensions + language + timezone,
+     * computed by the student's browser. Stable across different browsers on
+     * the same physical device, so two marks in one session with identical
+     * fingerprints but different deviceUuids = same phone via different
+     * browsers (probable cheat). NOT used for auto-reject — surfaced to
+     * faculty as a review flag because two students with literally identical
+     * phones can collide.
+     */
+    @Column(name = "client_fingerprint", length = 256)
+    private String clientFingerprint;
 }

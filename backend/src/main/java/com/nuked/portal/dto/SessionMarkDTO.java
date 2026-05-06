@@ -14,4 +14,5 @@ public class SessionMarkDTO {
     private String markedAt;   // ISO string or null
     private String deviceUuid; // student's localStorage UUID, null if not provided
     private String clientIp;   // source IP (for faculty audit)
+    private String clientFingerprint; // screen+lang+tz signature for cross-browser flag
 }
