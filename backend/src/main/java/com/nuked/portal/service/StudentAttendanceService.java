@@ -165,7 +165,7 @@ public class StudentAttendanceService {
             a.setEnrollment(match);
             a.setLectureNo(session.getLectureNo());
             a.setDate(session.getLectureDate());
-            a.setDurationHrs(1.5);
+            a.setDurationHrs(durationFor(fs.getCourse().getCreditHours()));
             a.setPresence("P");
             a.setMethod("PIN");
             a.setSessionId(sessionId);
@@ -214,6 +214,15 @@ public class StudentAttendanceService {
         n = n.replaceAll("[\\p{P}\\p{S}]", "");
         // Collapse runs of spaces and lowercase + trim.
         return n.replaceAll(" +", " ").trim().toLowerCase();
+    }
+
+    /**
+     * Per-FAST policy, lecture duration depends on course credit hours:
+     *   3 CrH → 1.5-hour lecture (theory)
+     *   1 or 2 CrH → 3-hour session (lab / supplementary)
+     */
+    static double durationFor(Integer creditHours) {
+        return (creditHours != null && creditHours == 3) ? 1.5 : 3.0;
     }
 
     /** Haversine great-circle distance between two lat/long points, in meters. */
