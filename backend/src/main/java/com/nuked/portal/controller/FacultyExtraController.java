@@ -312,6 +312,7 @@ public class FacultyExtraController {
                 else if ("L".equals(p)) leave++;
             }
             Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", s.getId());
             m.put("sessionId", s.getId());
             m.put("lectureNo", lectureNo--);
             m.put("date", s.getStartedAt() == null ? null
@@ -322,6 +323,13 @@ public class FacultyExtraController {
             m.put("absent", absent);
             m.put("leave", leave);
             m.put("total", rec.size());
+            // Live-session fields — needed so the faculty UI can restore the
+            // active PIN window after a page refresh.
+            m.put("startedAt", s.getStartedAt() == null ? null : s.getStartedAt().toString());
+            m.put("endsAt", s.getEndsAt() == null ? null : s.getEndsAt().toString());
+            m.put("durationMinutes", s.getDurationMinutes());
+            m.put("sessionToken", s.getSessionToken());
+            m.put("pinCode", s.getPinCode());
             out.add(m);
         }
         return ResponseEntity.ok(out);

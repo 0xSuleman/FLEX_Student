@@ -8,13 +8,11 @@ import api from '../../services/api'
 import { PageHeader, SectionCard, ActionButton, StatCard } from '../../components/PageShell'
 
 // ── Mode constants ──
-// EDIT replaces the old MANUAL flow — instead of typing topic/duration and
-// rebuilding from scratch, faculty picks a past closed session and edits its
-// P/A/L inline.
 const IDLE = 'idle'
 const VIEW = 'view'
 const EDIT = 'edit'
-const BLE  = 'ble'
+const BLE  = 'ble'      // PIN-driven student self-mark + faculty roster polling
+const MANUAL = 'manual' // Faculty-only marking — opens a session, hides the PIN, taps students to set P/A/L
 
 const STATUS_TONE = {
   Present: 'bg-moss text-cream',
@@ -175,7 +173,7 @@ export default function FacultyAttendance() {
   // portal's "Mark Attendance" button, and reflects it in the live faculty roster.
   // Faculty manual overrides are preserved (only Pending rows are updated from server).
   useEffect(() => {
-    if (mode !== BLE || !bleSession) return
+    if ((mode !== BLE && mode !== MANUAL) || !bleSession) return
     pollRef.current = setInterval(async () => {
       if (Date.now() >= bleSession.endsAt) return
       try {
@@ -197,7 +195,7 @@ export default function FacultyAttendance() {
 
   // Countdown ticker
   useEffect(() => {
-    if (mode !== BLE || !bleSession) return
+    if ((mode !== BLE && mode !== MANUAL) || !bleSession) return
     tickRef.current = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(tickRef.current)
   }, [mode, bleSession])
@@ -259,6 +257,25 @@ export default function FacultyAttendance() {
     if (!courseId) return
     setMode(BLE)
     setBleSession(null)
+  }
+
+  const startManualMode = () => {
+    if (!courseId) return
+    setMode(MANUAL)
+    setBleSession(null)
+  }
+
+  // Click-to-cycle: only used in MANUAL mode (and live PIN sessions where
+  // faculty wants to override). Walks Pending → Present → Absent → Leave →
+  // back to Pending.
+  const cycleRowStatus = (enrollmentId) => {
+    const order = ['Pending', 'Present', 'Absent', 'Leave']
+    setRoster(prev => prev.map(r => {
+      if (r.enrollmentId !== enrollmentId) return r
+      const idx = order.indexOf(r.status)
+      const next = order[(idx + 1) % order.length]
+      return { ...r, status: next, method: next === 'Pending' ? '—' : 'Manual', dirty: true }
+    }))
   }
 
   const openBleWindow = async () => {
@@ -360,6 +377,23 @@ export default function FacultyAttendance() {
     }))
   }
 
+  const deleteSession = async (sessionId) => {
+    if (!sessionId) return
+    if (!confirm('Permanently delete this session and every attendance record tied to it? This cannot be undone.')) return
+    try {
+      await api.delete(`/faculty/attendance/sessions/${sessionId}`)
+      setToast({ kind: 'ok', text: 'Session deleted.' })
+      setEditSessionId(null)
+      const res = await api.get(`/faculty/sections/${courseId}/attendance/sessions`)
+      const arr = Array.isArray(res.data) ? res.data : []
+      setViewSessions(arr.filter(s => s.status === 'CLOSED'))
+    } catch (err) {
+      setToast({ kind: 'err', text: 'Delete failed: ' + (err.response?.data?.message || err.message) })
+    } finally {
+      clearToastSoon()
+    }
+  }
+
   const saveEdit = async () => {
     if (!editSessionId) return
     const dirtyRows = editRoster.filter(r => r.dirty && r.status !== 'Pending')
@@ -391,7 +425,7 @@ export default function FacultyAttendance() {
   }
 
   const cancelMode = () => {
-    if (mode === BLE && bleSession) {
+    if ((mode === BLE || mode === MANUAL) && bleSession) {
       api.post(`/faculty/attendance/sessions/${bleSession.id}/close`, { marks: [] }).catch(() => {})
     }
     setMode(IDLE)
@@ -483,7 +517,7 @@ export default function FacultyAttendance() {
   const elapsedPct = bleSession ? Math.min(100, ((now - bleSession.startedAt) / (bleSession.endsAt - bleSession.startedAt)) * 100) : 0
 
   useEffect(() => {
-    if (mode === BLE && bleSession && remainingMs <= 0) closeBleAndSave()
+    if ((mode === BLE || mode === MANUAL) && bleSession && remainingMs <= 0) closeBleAndSave()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now])
 
@@ -517,15 +551,15 @@ export default function FacultyAttendance() {
             <button onClick={() => templateInputRef.current?.click()} disabled={!courseId || templateUploading}
               title="Upload Sir's attendance sheet template (xlsx)"
               className="bg-mustard text-ink border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
-              <Upload size={11} strokeWidth={3} /> {templateUploading ? 'Uploading…' : (templateStatus?.uploaded ? 'Replace Template' : 'Upload Template')}
+              <Upload size={11} strokeWidth={3} /> {templateUploading ? 'Uploading…' : (templateStatus?.uploaded ? 'Insert Excel Sheet' : 'Insert Excel Sheet')}
             </button>
             <button onClick={downloadFilledSheet} disabled={!courseId || !templateStatus?.uploaded}
-              title="Download the template with today's P/A column filled in"
+              title="Download the template you uploaded with today's date column filled in P/A for every student. Submit this to AO/HOD as the day's attendance record."
               className="bg-burn text-bone border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
               <Download size={11} strokeWidth={3} /> Today's Sheet
             </button>
             <button onClick={exportExcel} disabled={!courseId}
-              title="Download per-section attendance overview (xlsx)"
+              title="Download a summary across ALL past sessions for this section: one column per lecture, totals, % per student. Useful for end-of-semester review."
               className="bg-coffee text-bone border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
               <Download size={11} strokeWidth={3} /> Overview
             </button>
@@ -534,14 +568,15 @@ export default function FacultyAttendance() {
         </div>
 
         {mode === IDLE && (
-          <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-3">
-            <ModeButton onClick={startView}      Icon={Eye}       title="View Attendance" sub="Read-only history of past closed sessions." />
-            <ModeButton onClick={startEdit}      Icon={Hand}      title="Edit Attendance" sub="Pick a past session and update P/A/L for any student." accent />
-            <ModeButton onClick={startBleMode}   Icon={KeyRound} title="PIN Attendance"  sub="Open a PIN window so students can self-mark from their phones." />
+          <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <ModeButton onClick={startView}        Icon={Eye}       title="View"   sub="Past closed sessions, read-only." />
+            <ModeButton onClick={startEdit}        Icon={Hand}      title="Edit"   sub="Pick a past session, update P/A/L." accent />
+            <ModeButton onClick={startBleMode}     Icon={KeyRound}  title="PIN"    sub="Students self-mark from phones." />
+            <ModeButton onClick={startManualMode}  Icon={ListChecks} title="Manual" sub="Tap each student to mark P/A/L." />
           </div>
         )}
 
-        {mode === BLE && !bleSession && (
+        {(mode === BLE || mode === MANUAL) && !bleSession && (
           <div className="p-5 grid grid-cols-1 md:grid-cols-12 gap-4">
             <Field className="md:col-span-8" label="Lecture Topic">
               <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Iterative & Incremental Models"
@@ -551,7 +586,9 @@ export default function FacultyAttendance() {
               <input type="range" min="5" max="180" step="5" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full accent-ink" />
             </Field>
             <div className="md:col-span-12 text-[11px] font-bold text-cocoa">
-              A 6-digit PIN is generated when you click Open. Announce or project it; students enter the PIN + their location is checked against the classroom.
+              {mode === MANUAL
+                ? 'Manual mode — after you click Open, tap each student row in the roster to cycle Pending → Present → Absent → Leave. Close & Save to commit; unmarked students become Absent automatically.'
+                : 'A 6-digit PIN is generated when you click Open. Announce or project it; students enter the PIN + their location is checked against the classroom.'}
             </div>
             <div className="md:col-span-12 flex justify-end gap-2">
               <ActionButton tone="bone" Icon={X} onClick={cancelMode}>Back</ActionButton>
@@ -560,7 +597,7 @@ export default function FacultyAttendance() {
           </div>
         )}
 
-        {mode === BLE && bleSession && (
+        {(mode === BLE || mode === MANUAL) && bleSession && (
           <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-12 gap-4">
             <div className="md:col-span-7 bg-cream border-2 border-ink rounded-md px-3 py-2.5">
               <div className="text-[10px] font-extrabold text-coffee uppercase tracking-widest">&gt; Topic</div>
@@ -586,13 +623,23 @@ export default function FacultyAttendance() {
                   Token <span className="font-mono text-ink">{bleSession.sessionToken}</span>
                 </div>
               </div>
-              <div className="bg-burn text-bone border-2 border-ink rounded-md p-3 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-extrabold uppercase tracking-widest opacity-80">&gt; Attendance PIN</div>
-                  <div className="font-mono font-black text-4xl md:text-5xl mt-1 tracking-[0.2em] tabular-nums">{bleSession.pinCode || '------'}</div>
-                  <div className="text-[10px] mt-1 opacity-80 font-bold uppercase tracking-wider">Announce or project this code</div>
+              {mode === BLE ? (
+                <div className="bg-burn text-bone border-2 border-ink rounded-md p-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-extrabold uppercase tracking-widest opacity-80">&gt; Attendance PIN</div>
+                    <div className="font-mono font-black text-4xl md:text-5xl mt-1 tracking-[0.2em] tabular-nums">{bleSession.pinCode || '------'}</div>
+                    <div className="text-[10px] mt-1 opacity-80 font-bold uppercase tracking-wider">Announce or project this code</div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-coffee text-bone border-2 border-ink rounded-md p-3 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-extrabold uppercase tracking-widest opacity-80">&gt; Manual mode</div>
+                    <div className="font-extrabold text-base mt-1">Tap each student row below to cycle Pending → Present → Absent → Leave.</div>
+                    <div className="text-[10px] mt-1 opacity-80 font-bold uppercase tracking-wider">Close & Save when done — unmarked students become Absent automatically.</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -623,7 +670,7 @@ export default function FacultyAttendance() {
         </div>
       )}
 
-      {mode === BLE && (
+      {(mode === BLE || mode === MANUAL) && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <StatCard Icon={Users} label="Total" value={stats.total} tone="bg-cocoa text-bone" />
           <StatCard Icon={CheckCircle2} label="Present" value={stats.present} tone="bg-moss text-cream" />
@@ -633,7 +680,7 @@ export default function FacultyAttendance() {
         </div>
       )}
 
-      {mode === BLE && (
+      {(mode === BLE || mode === MANUAL) && (
         <SectionCard
           title={`Roster — ${course?.courseCode || ''} · ${course?.section || ''}`}
           right={
@@ -659,7 +706,9 @@ export default function FacultyAttendance() {
                 const dupFingerprint = !dupDevice && r.clientFingerprint && fingerprintCounts[r.clientFingerprint] > 1
                 const rowBg = dupDevice ? 'bg-bad/10' : dupFingerprint ? 'bg-mustard/15' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
                 return (
-                <tr key={r.enrollmentId || r.roll} className={`border-b border-dashed border-cocoa/30 ${rowBg}`}>
+                <tr key={r.enrollmentId || r.roll}
+                  onClick={mode === MANUAL ? () => cycleRowStatus(r.enrollmentId) : undefined}
+                  className={`border-b border-dashed border-cocoa/30 ${rowBg} ${mode === MANUAL ? 'cursor-pointer hover:bg-tan/40' : ''}`}>
                   <td className="px-4 py-2.5 text-cocoa font-bold text-xs">{i + 1}</td>
                   <td className="px-4 py-2.5 font-extrabold text-ink">{r.roll}</td>
                   <td className="px-4 py-2.5 text-ink">{r.name}</td>
@@ -748,10 +797,17 @@ export default function FacultyAttendance() {
                                   <button onClick={() => setEditSessionId(null)} disabled={editSaving}
                                     className="bg-bone text-ink border-2 border-ink rounded px-2.5 py-1 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">Close</button>
                                   {mode === EDIT && (
-                                    <button onClick={saveEdit} disabled={editSaving}
-                                      className="bg-burn text-bone border-2 border-ink rounded px-2.5 py-1 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1">
-                                      <Save size={11} strokeWidth={3} /> {editSaving ? 'Saving…' : 'Save'}
-                                    </button>
+                                    <>
+                                      <button onClick={() => deleteSession(s.sessionId)} disabled={editSaving}
+                                        title="Permanently delete this entire session and every attendance row in it. Cannot be undone."
+                                        className="bg-bad text-bone border-2 border-ink rounded px-2.5 py-1 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1">
+                                        <X size={11} strokeWidth={3} /> Delete
+                                      </button>
+                                      <button onClick={saveEdit} disabled={editSaving}
+                                        className="bg-burn text-bone border-2 border-ink rounded px-2.5 py-1 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1">
+                                        <Save size={11} strokeWidth={3} /> {editSaving ? 'Saving…' : 'Save'}
+                                      </button>
+                                    </>
                                   )}
                                 </div>
                               </div>
@@ -816,14 +872,14 @@ export default function FacultyAttendance() {
 
 function ModeButton({ onClick, Icon, title, sub, accent }) {
   return (
-    <button onClick={onClick} className={`chunky-card chunky-card-hover p-4 text-left ${accent ? 'ring-2 ring-burn' : ''}`}>
-      <div className="flex items-center gap-3 mb-2">
-        <div className="w-10 h-10 bg-coffee border-2 border-ink shadow-pixel-sm rounded-md flex items-center justify-center">
-          <Icon size={16} className="text-bone" strokeWidth={2.8} />
+    <button onClick={onClick} className={`chunky-card chunky-card-hover p-2.5 text-left ${accent ? 'ring-2 ring-burn' : ''}`}>
+      <div className="flex items-center gap-2 mb-1.5">
+        <div className="w-7 h-7 bg-coffee border-2 border-ink shadow-pixel-sm rounded-md flex items-center justify-center shrink-0">
+          <Icon size={13} className="text-bone" strokeWidth={2.8} />
         </div>
-        <span className="font-display text-sm text-ink uppercase tracking-wider">{title}</span>
+        <span className="font-display text-xs text-ink uppercase tracking-wider truncate">{title}</span>
       </div>
-      <div className="text-[11px] text-cocoa font-bold leading-snug">{sub}</div>
+      <div className="text-[10px] text-cocoa font-bold leading-snug line-clamp-2">{sub}</div>
     </button>
   )
 }

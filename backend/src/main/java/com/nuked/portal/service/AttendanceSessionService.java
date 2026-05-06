@@ -9,6 +9,8 @@ import com.nuked.portal.repository.AttendanceRepository;
 import com.nuked.portal.repository.AttendanceSessionRepository;
 import com.nuked.portal.repository.EnrollmentRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.security.SecureRandom;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AttendanceSessionService {
@@ -206,6 +209,73 @@ public class AttendanceSessionService {
         s.setStatus(AttendanceSession.Status.CLOSED);
         sessionRepository.save(s);
         return toDto(s);
+    }
+
+    /**
+     * Hard-delete a session and every Attendance row tied to it. Faculty-only,
+     * verifies ownership. Used by the "Delete Session" button in Edit mode
+     * when faculty wants to undo a misopened lecture entirely.
+     */
+    @Transactional
+    public void deleteSession(String username, Long sessionId) {
+        AttendanceSession s = loadOwned(username, sessionId);
+        for (Attendance a : attendanceRepository.findBySessionId(sessionId)) {
+            attendanceRepository.delete(a);
+        }
+        sessionRepository.delete(s);
+    }
+
+    /**
+     * Safety net for the auto-absent flow: if faculty closed their tab before
+     * the timer hit zero, expired sessions would otherwise stay OPEN forever.
+     * This runs every 60 seconds, finds OPEN sessions whose endsAt is past,
+     * and closes them — auto-marking every unmarked student as Absent
+     * (method=Auto), exactly the same way the manual Close & Save button
+     * does. Faculty can still adjust via Edit mode afterwards.
+     */
+    @Scheduled(fixedDelay = 60_000L, initialDelay = 30_000L)
+    @Transactional
+    public void autoCloseExpiredSessions() {
+        Instant cutoff = Instant.now();
+        List<AttendanceSession> expired = sessionRepository.findAll().stream()
+                .filter(s -> s.getStatus() == AttendanceSession.Status.OPEN)
+                .filter(s -> s.getEndsAt() != null && s.getEndsAt().isBefore(cutoff))
+                .toList();
+        if (expired.isEmpty()) return;
+        for (AttendanceSession s : expired) {
+            try {
+                closeWithAutoAbsent(s, cutoff);
+                log.info("[auto-close] session {} → CLOSED (expired at {})", s.getId(), s.getEndsAt());
+            } catch (Exception e) {
+                log.warn("[auto-close] failed for session {}: {}", s.getId(), e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Reusable close-and-mark-absent path. Used by both the user-facing
+     * close() (with auth) and the scheduled auto-close (no user context).
+     */
+    private void closeWithAutoAbsent(AttendanceSession s, Instant when) {
+        if (s.getStatus() == AttendanceSession.Status.CLOSED) return;
+        var fs = s.getFacultySection();
+        List<Enrollment> roster = enrollmentRepository.findByCourseIdAndSectionAndSemester(
+                fs.getCourse().getId(), fs.getSection(), fs.getSemester());
+        for (Enrollment e : roster) {
+            if (attendanceRepository.findBySessionIdAndEnrollmentId(s.getId(), e.getId()).isPresent()) continue;
+            Attendance a = new Attendance();
+            a.setEnrollment(e);
+            a.setLectureNo(s.getLectureNo());
+            a.setDate(s.getLectureDate());
+            a.setDurationHrs(1.5);
+            a.setPresence("A");
+            a.setMethod("Auto");
+            a.setSessionId(s.getId());
+            attendanceRepository.save(a);
+        }
+        s.setClosedAt(when);
+        s.setStatus(AttendanceSession.Status.CLOSED);
+        sessionRepository.save(s);
     }
 
     private AttendanceSession loadOwned(String username, Long sessionId) {
