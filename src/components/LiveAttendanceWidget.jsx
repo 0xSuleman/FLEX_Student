@@ -4,6 +4,46 @@ import api from '../services/api'
 
 const POLL_MS = 8000
 
+// Per-browser stable identifier persisted in localStorage. Sent with every
+// mark so the backend can enforce per-session device binding (one device
+// can only mark for one enrollment in the same session). Cleared by
+// "clear browsing data" / incognito — by design, this is friction not a
+// security boundary.
+function getOrCreateDeviceUuid() {
+  try {
+    let id = localStorage.getItem('flex_device_id')
+    if (!id) {
+      id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : 'dev-' + Math.random().toString(36).slice(2) + '-' + Date.now().toString(36)
+      localStorage.setItem('flex_device_id', id)
+    }
+    return id
+  } catch {
+    return null
+  }
+}
+
+// Cross-browser device signature: stable signals that don't change when the
+// student switches Safari → Chrome → Bluefy on the same physical device.
+// Excludes User-Agent (browser-dependent) and instead uses screen geometry +
+// locale + timezone which the OS controls. Two students with identical phone
+// models can collide — backend treats this as a faculty review flag, never
+// an auto-reject.
+function getClientFingerprint() {
+  try {
+    const w = (window.screen && window.screen.width) || 0
+    const h = (window.screen && window.screen.height) || 0
+    const ratio = window.devicePixelRatio || 1
+    const lang = (navigator.languages && navigator.languages[0]) || navigator.language || ''
+    let tz = ''
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '' } catch {}
+    return `${w}x${h}@${ratio}|${lang}|${tz}`
+  } catch {
+    return null
+  }
+}
+
 // Aggressively normalize a BLE device name so visually-identical names compare
 // equal. Mirrors StudentAttendanceService.normalizeName on the backend so the
 // pre-flight UI never disagrees with the server.
@@ -195,6 +235,8 @@ export default function LiveAttendanceWidget() {
         bleDeviceName: bleDevice.name,
         latitude: coords.latitude,
         longitude: coords.longitude,
+        deviceUuid: getOrCreateDeviceUuid(),
+        clientFingerprint: getClientFingerprint(),
       })
       setToast({ kind: 'ok', text: `Present marked for ${s.courseCode} · ${s.section}.` })
       poll()
