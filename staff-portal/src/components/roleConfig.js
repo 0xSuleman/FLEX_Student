@@ -1,5 +1,5 @@
 import {
-  Home, BookOpen, GraduationCap, FileX, BarChart3, Bluetooth, Calendar,
+  Home, BookOpen, GraduationCap, FileX, BarChart3, Calendar,
   Award, MessageSquare, Users, ClipboardList, Building, Wallet, Receipt,
   AlertTriangle, FileText, Settings, KeyRound, Shield, Database, Mail,
   UserPlus, Send, Lock, FileCheck, FilePen, ShieldCheck, ScrollText,
@@ -18,7 +18,7 @@ export const ROLES = {
         { to: '/faculty/timetable',   label: 'Timetable',     icon: Calendar },
       ]},
       { group: 'Attendance', items: [
-        { to: '/faculty/attendance',  label: 'BLE Attendance',icon: Bluetooth },
+        { to: '/faculty/attendance',  label: 'Attendance',    icon: KeyRound },
       ]},
       { group: 'Evaluation', items: [
         { to: '/faculty/marks',       label: 'Marks',         icon: Award },
