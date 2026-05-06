@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../services/api'
 import {
-  BookOpen, Calendar, Bluetooth, GraduationCap, FileX, BarChart3,
+  BookOpen, Calendar, KeyRound, GraduationCap, FileX, BarChart3,
   Users, Clock, AlertTriangle, ChevronRight, MessageSquare, Award,
 } from 'lucide-react'
 
@@ -140,7 +140,7 @@ export default function FacultyDashboard() {
           <div className="col-span-6 sm:col-span-3 chunky-card chunky-card-hover p-5 relative overflow-hidden cascade-in" style={{ animationDelay: '0.3s' }}>
             <div className="absolute -bottom-10 -right-10 w-32 h-32 rounded-full bg-burn/10" />
             <div className="relative">
-              <div className="text-xs font-extrabold text-coffee uppercase tracking-widest">BLE</div>
+              <div className="text-xs font-extrabold text-coffee uppercase tracking-widest">PIN</div>
               <div className="text-[10px] text-cocoa/70 uppercase font-bold mt-2">Attendance</div>
               <div className="font-black text-xl text-ink mt-0.5">Idle</div>
               <div className="text-[11px] font-bold text-coffee mt-1">No active session</div>
@@ -148,7 +148,7 @@ export default function FacultyDashboard() {
                 onClick={() => navigate('/faculty/attendance')}
                 className="mt-3 inline-flex items-center gap-1.5 bg-cocoa text-bone border-2 border-ink rounded-md px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all"
               >
-                <Bluetooth size={11} strokeWidth={3} /> Open
+                <KeyRound size={11} strokeWidth={3} /> Open
               </button>
             </div>
           </div>
@@ -158,7 +158,7 @@ export default function FacultyDashboard() {
         <div className="cascade-in" style={{ animationDelay: '0.04s' }}>
           <h2 className="heading-retro text-2xl mb-4">Quick Actions</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <QuickAction icon={Bluetooth}      label="BLE"        sub="Attendance"       onClick={() => navigate('/faculty/attendance')} />
+            <QuickAction icon={KeyRound}       label="PIN"        sub="Attendance"       onClick={() => navigate('/faculty/attendance')} />
             <QuickAction icon={Award}          label="Marks"      sub="Entry"            onClick={() => navigate('/faculty/marks')} />
             <QuickAction icon={GraduationCap}  label="Grading"    sub="Submit to HOD"    onClick={() => navigate('/faculty/grading')} />
             <QuickAction icon={FileX}          label="Withdraw"   sub="Requests"         onClick={() => navigate('/faculty/withdrawals')} />
