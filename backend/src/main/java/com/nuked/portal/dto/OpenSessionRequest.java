@@ -15,11 +15,7 @@ public class OpenSessionRequest {
     @Min(5)
     private Integer durationMinutes;
 
-    /**
-     * Name the teacher's phone / classroom BLE beacon is advertising with —
-     * e.g. "FLEX-CS3001-A". Students must report the same name on their mark
-     * request, which is how proximity is verified.
-     */
+    /** Legacy — ignored on the pin-geolocation branch. Kept for backward compatibility. */
     private String bleDeviceName;
 
     /** Classroom location captured from the faculty's browser at open-time. */

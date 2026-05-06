@@ -50,12 +50,21 @@ public class AttendanceSession {
     private Integer durationMinutes;
 
     /**
-     * Name of the BLE peripheral the teacher is broadcasting from (their phone
-     * or a classroom beacon). Students must report the same name on their
-     * mark request — backend rejects otherwise. Convention: FLEX-<anything>.
+     * Legacy: BLE peripheral name from the bluetooth-attendance demo path.
+     * Unused on the pin-geolocation branch but kept so old sessions still
+     * deserialize. Always null for new sessions.
      */
     @Column(length = 64)
     private String bleDeviceName;
+
+    /**
+     * 6-digit numeric PIN generated when the session is opened. Teacher
+     * announces / projects it; students enter it to mark attendance.
+     * Combined with the geolocation gate below this is a universal-browser
+     * proximity check (works on iPhone Safari, no Bluetooth needed).
+     */
+    @Column(length = 6)
+    private String pinCode;
 
     /** Classroom lat/long captured when the teacher opened the session. */
     private Double latitude;

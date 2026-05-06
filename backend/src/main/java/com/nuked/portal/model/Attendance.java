@@ -38,4 +38,20 @@ public class Attendance {
     /** AttendanceSession id this entry came from (null for legacy / non-session marks). */
     @Column(name = "session_id")
     private Long sessionId;
+
+    /**
+     * Per-browser localStorage UUID sent by the student's device on each mark.
+     * Used as a per-session lock: once a UUID has marked enrollment X in
+     * session N, the same UUID cannot mark a different enrollment in the
+     * same session — catches "log out, log in as friend" cheats.
+     */
+    @Column(name = "device_uuid", length = 64)
+    private String deviceUuid;
+
+    /**
+     * Source IP recorded server-side at mark time. Not used for validation
+     * (NAT makes it noisy) — purely for faculty audit / forensic review.
+     */
+    @Column(name = "client_ip", length = 64)
+    private String clientIp;
 }

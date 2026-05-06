@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import {
-  Bluetooth, Play, Square, Save, Clock, Eye, Hand, X,
+  KeyRound, Play, Square, Save, Clock, Eye, Hand, X,
   Users, CheckCircle2, XCircle, Coffee, Search, AlertTriangle,
   ListChecks, RefreshCw, Download, Upload,
 } from 'lucide-react'
@@ -33,12 +33,12 @@ export default function FacultyAttendance() {
   const [bleSession, setBleSession] = useState(null)
   const [topic, setTopic] = useState('')
   const [duration, setDuration] = useState(15)
-  const [bleDeviceName, setBleDeviceName] = useState('')
+  // PIN+geo branch: BLE device name is gone; the session response now carries
+  // a 6-digit pinCode that the teacher announces / projects.
   const [now, setNow] = useState(Date.now())
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [bleSupported, setBleSupported] = useState(false)
   // VIEW mode: real past sessions from backend + per-session expanded edit roster.
   const [viewSessions, setViewSessions] = useState([])
   const [viewLoading, setViewLoading] = useState(false)
@@ -51,10 +51,6 @@ export default function FacultyAttendance() {
   const templateInputRef = useRef(null)
   const tickRef = useRef(null)
   const pollRef = useRef(null)
-
-  useEffect(() => {
-    setBleSupported(typeof navigator !== 'undefined' && 'bluetooth' in navigator)
-  }, [])
 
   // Load assigned sections
   useEffect(() => {
@@ -159,7 +155,7 @@ export default function FacultyAttendance() {
           const status = live.presence === 'P' ? 'Present'
                        : live.presence === 'A' ? 'Absent'
                        : live.presence === 'L' ? 'Leave' : r.status
-          return { ...r, status, method: live.method || 'Bluetooth' }
+          return { ...r, status, method: live.method || 'PIN', deviceUuid: live.deviceUuid, clientIp: live.clientIp }
         }))
       } catch { /* keep last good */ }
     }, 2000)
@@ -189,6 +185,16 @@ export default function FacultyAttendance() {
     return roster.filter(r => r.roll.toLowerCase().includes(q) || r.name.toLowerCase().includes(q))
   }, [roster, search])
 
+  // Count device-UUIDs across the full roster (not the filtered subset) so a
+  // duplicate is still flagged even if the user search-filters one away.
+  const deviceCounts = useMemo(() => {
+    const m = {}
+    for (const r of roster) {
+      if (r.deviceUuid) m[r.deviceUuid] = (m[r.deviceUuid] || 0) + 1
+    }
+    return m
+  }, [roster])
+
   // ── Mode initiations ──
   const startEdit = async () => {
     setMode(EDIT); setBleSession(null)
@@ -212,27 +218,7 @@ export default function FacultyAttendance() {
 
   const openBleWindow = async () => {
     if (!topic.trim()) {
-      setToast({ kind: 'err', text: 'Topic is required before opening a BLE window.' })
-      clearToastSoon()
-      return
-    }
-    const cleanedName = (bleDeviceName || '').trim()
-    if (!cleanedName) {
-      setToast({ kind: 'err', text: 'BLE device name is required. Type the exact name your laptop or phone is broadcasting under.' })
-      clearToastSoon()
-      return
-    }
-    if (!bleSupported) {
-      setToast({ kind: 'err', text: 'Bluetooth is not available in this browser. Use Chrome/Edge over HTTPS or localhost.' })
-      clearToastSoon()
-      return
-    }
-    try {
-      // Faculty does a sanity-pair to verify their device is reachable.
-      // Picker shows everything; faculty selects their own device.
-      await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [] })
-    } catch (err) {
-      setToast({ kind: 'err', text: 'Bluetooth pairing cancelled. Make sure your device is broadcasting + Bluetooth is on, then retry.' })
+      setToast({ kind: 'err', text: 'Topic is required before opening a session.' })
       clearToastSoon()
       return
     }
@@ -259,7 +245,6 @@ export default function FacultyAttendance() {
         facultySectionId: parseInt(courseId, 10),
         topic,
         durationMinutes: duration,
-        bleDeviceName: cleanedName,
         latitude: coords.latitude,
         longitude: coords.longitude,
       })
@@ -267,12 +252,13 @@ export default function FacultyAttendance() {
       setBleSession({
         id: s.id,
         sessionToken: s.sessionToken,
+        pinCode: s.pinCode,
         startedAt: new Date(s.startedAt).getTime(),
         endsAt: new Date(s.endsAt).getTime(),
       })
       setNow(new Date(s.startedAt).getTime())
       await loadRoster('Pending', '—')
-      setToast({ kind: 'info', text: `BLE window open · token ${s.sessionToken}. Students see "Mark Attendance" on their portal.` })
+      setToast({ kind: 'info', text: `Session live · PIN ${s.pinCode}. Announce this code to the class.` })
       clearToastSoon()
     } catch (err) {
       setToast({ kind: 'err', text: 'Failed to open session: ' + (err.response?.data?.message || err.message) })
@@ -395,7 +381,7 @@ export default function FacultyAttendance() {
       const present = finalRoster.filter(r => r.status === 'Present').length
       const absent  = finalRoster.filter(r => r.status === 'Absent').length
       const leave   = finalRoster.filter(r => r.status === 'Leave').length
-      setToast({ kind: 'ok', text: `BLE session closed & saved · ${present} present / ${absent} absent` })
+      setToast({ kind: 'ok', text: `Session closed & saved · ${present} present / ${absent} absent` })
       setMode(IDLE)
       setBleSession(null)
       setTopic('')
@@ -463,7 +449,7 @@ export default function FacultyAttendance() {
         kicker="Attendance"
         KickerIcon={ListChecks}
         title="ATTENDANCE"
-        subtitle="Pick a section, then choose a mode — view past records, take attendance manually, or open a BLE window for students to self-mark."
+        subtitle="Pick a section, then choose a mode — view past records, edit a past session, or open a PIN-based attendance window."
       />
 
       <div className="chunky-card overflow-hidden">
@@ -498,7 +484,7 @@ export default function FacultyAttendance() {
               className="bg-coffee text-bone border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
               <Download size={11} strokeWidth={3} /> Overview
             </button>
-            <ModeBadge mode={mode} bleSupported={bleSupported} />
+            <ModeBadge mode={mode} />
           </div>
         </div>
 
@@ -506,23 +492,22 @@ export default function FacultyAttendance() {
           <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-3">
             <ModeButton onClick={startView}      Icon={Eye}       title="View Attendance" sub="Read-only history of past closed sessions." />
             <ModeButton onClick={startEdit}      Icon={Hand}      title="Edit Attendance" sub="Pick a past session and update P/A/L for any student." accent />
-            <ModeButton onClick={startBleMode}   Icon={Bluetooth} title="BLE Attendance"  sub="Open a Bluetooth window so students can self-mark from their portal." />
+            <ModeButton onClick={startBleMode}   Icon={KeyRound} title="PIN Attendance"  sub="Open a PIN window so students can self-mark from their phones." />
           </div>
         )}
 
         {mode === BLE && !bleSession && (
           <div className="p-5 grid grid-cols-1 md:grid-cols-12 gap-4">
-            <Field className="md:col-span-7" label="Lecture Topic">
+            <Field className="md:col-span-8" label="Lecture Topic">
               <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Iterative & Incremental Models"
                 className="w-full bg-bone border-2 border-ink rounded-md px-3 py-2 font-mono text-sm text-ink focus:outline-none" />
             </Field>
-            <Field className="md:col-span-3" label={`Duration · ${duration >= 60 ? `${(duration / 60).toFixed(duration % 60 ? 1 : 0)} hr` : `${duration} min`}`}>
+            <Field className="md:col-span-4" label={`Duration · ${duration >= 60 ? `${(duration / 60).toFixed(duration % 60 ? 1 : 0)} hr` : `${duration} min`}`}>
               <input type="range" min="5" max="180" step="5" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full accent-ink" />
             </Field>
-            <Field className="md:col-span-2" label="BLE device name">
-              <input value={bleDeviceName} onChange={(e) => setBleDeviceName(e.target.value)} placeholder=""
-                className="w-full bg-bone border-2 border-ink rounded-md px-3 py-2 font-mono text-sm text-ink focus:outline-none" />
-            </Field>
+            <div className="md:col-span-12 text-[11px] font-bold text-cocoa">
+              A 6-digit PIN is generated when you click Open. Announce or project it; students enter the PIN + their location is checked against the classroom.
+            </div>
             <div className="md:col-span-12 flex justify-end gap-2">
               <ActionButton tone="bone" Icon={X} onClick={cancelMode}>Back</ActionButton>
               <ActionButton tone="cocoa" Icon={Play} onClick={openBleWindow}>Open</ActionButton>
@@ -556,13 +541,11 @@ export default function FacultyAttendance() {
                   Token <span className="font-mono text-ink">{bleSession.sessionToken}</span>
                 </div>
               </div>
-              <div className="bg-coffee text-bone border-2 border-ink rounded-md p-3 flex items-center gap-3">
-                <div className="w-10 h-10 bg-bone border-2 border-ink rounded-md flex items-center justify-center shrink-0">
-                  <Bluetooth size={18} className="text-coffee" strokeWidth={3} />
-                </div>
+              <div className="bg-burn text-bone border-2 border-ink rounded-md p-3 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-extrabold uppercase tracking-widest opacity-80">&gt; Students must pair with</div>
-                  <div className="font-mono font-extrabold text-base mt-0.5 truncate">{bleDeviceName}</div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-widest opacity-80">&gt; Attendance PIN</div>
+                  <div className="font-mono font-black text-4xl md:text-5xl mt-1 tracking-[0.2em] tabular-nums">{bleSession.pinCode || '------'}</div>
+                  <div className="text-[10px] mt-1 opacity-80 font-bold uppercase tracking-wider">Announce or project this code</div>
                 </div>
               </div>
             </div>
@@ -622,11 +605,14 @@ export default function FacultyAttendance() {
                 <Th>#</Th><Th>Roll</Th><Th>Name</Th>
                 <Th center>Status</Th>
                 <Th center>Method</Th>
+                <Th center>Device</Th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r, i) => (
-                <tr key={r.enrollmentId || r.roll} className={`border-b border-dashed border-cocoa/30 ${i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'}`}>
+              {filtered.map((r, i) => {
+                const dupDevice = r.deviceUuid && deviceCounts[r.deviceUuid] > 1
+                return (
+                <tr key={r.enrollmentId || r.roll} className={`border-b border-dashed border-cocoa/30 ${dupDevice ? 'bg-bad/10' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'}`}>
                   <td className="px-4 py-2.5 text-cocoa font-bold text-xs">{i + 1}</td>
                   <td className="px-4 py-2.5 font-extrabold text-ink">{r.roll}</td>
                   <td className="px-4 py-2.5 text-ink">{r.name}</td>
@@ -636,12 +622,19 @@ export default function FacultyAttendance() {
                       : <span className={`tag ${STATUS_TONE[r.status]}`}>{r.status}</span>}
                   </td>
                   <td className="px-4 py-2.5 text-center">
-                    <span className={`tag ${r.method === 'Bluetooth' ? 'bg-coffee text-bone' : r.method === 'Manual' ? 'bg-mustard text-ink' : r.method === 'Auto' ? 'bg-cocoa text-bone' : 'bg-bone text-cocoa'}`}>{r.method}</span>
+                    <span className={`tag ${r.method === 'PIN' || r.method === 'Bluetooth' ? 'bg-coffee text-bone' : r.method === 'Manual' ? 'bg-mustard text-ink' : r.method === 'Auto' ? 'bg-cocoa text-bone' : 'bg-bone text-cocoa'}`}>{r.method}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    {r.deviceUuid
+                      ? <span className={`tag font-mono ${dupDevice ? 'bg-bad text-bone animate-blink' : 'bg-bone text-cocoa'}`} title={dupDevice ? `Same device used by ${deviceCounts[r.deviceUuid]} students — possible cheating` : `Device ${r.deviceUuid}${r.clientIp ? ` · IP ${r.clientIp}` : ''}`}>
+                          {dupDevice ? '⚠ ' : ''}…{r.deviceUuid.slice(-4)}
+                        </span>
+                      : <span className="text-cocoa/40 text-xs">—</span>}
                   </td>
                 </tr>
-              ))}
+              )})}
               {filtered.length === 0 && (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-cocoa font-bold text-xs uppercase tracking-wider">No students.</td></tr>
+                <tr><td colSpan={6} className="px-5 py-8 text-center text-cocoa font-bold text-xs uppercase tracking-wider">No students.</td></tr>
               )}
             </tbody>
           </table>
@@ -728,7 +721,7 @@ export default function FacultyAttendance() {
                                           : <span className={`tag ${STATUS_TONE[r.status]}`}>{r.status}</span>}
                                       </td>
                                       <td className="px-4 py-2 text-center">
-                                        <span className={`tag ${r.method === 'Bluetooth' ? 'bg-coffee text-bone' : r.method === 'Manual' ? 'bg-mustard text-ink' : r.method === 'Auto' ? 'bg-cocoa text-bone' : 'bg-bone text-cocoa'}`}>{r.method}</span>
+                                        <span className={`tag ${r.method === 'PIN' || r.method === 'Bluetooth' ? 'bg-coffee text-bone' : r.method === 'Manual' ? 'bg-mustard text-ink' : r.method === 'Auto' ? 'bg-cocoa text-bone' : 'bg-bone text-cocoa'}`}>{r.method}</span>
                                       </td>
                                       {mode === EDIT && (
                                         <td className="px-4 py-2 text-center">
@@ -782,18 +775,17 @@ function ModeButton({ onClick, Icon, title, sub, accent }) {
   )
 }
 
-function ModeBadge({ mode, bleSupported }) {
+function ModeBadge({ mode }) {
   const map = {
     [IDLE]: { label: 'IDLE', tone: 'bg-bone text-ink' },
     [VIEW]: { label: 'VIEW', tone: 'bg-coffee text-bone' },
     [EDIT]: { label: 'EDIT', tone: 'bg-mustard text-ink' },
-    [BLE]:  { label: 'BLE',  tone: 'bg-burn text-bone animate-blink' },
+    [BLE]:  { label: 'PIN',  tone: 'bg-burn text-bone animate-blink' },
   }
   const info = map[mode] || map[IDLE]
   return (
     <div className="flex items-center gap-2">
       <span className={`tag ${info.tone}`}>{info.label}</span>
-      {!bleSupported && <span className="tag bg-mustard text-ink" title="Web Bluetooth not supported">BLE OFF</span>}
     </div>
   )
 }

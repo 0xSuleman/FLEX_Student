@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.security.SecureRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +31,8 @@ public class AttendanceSessionService {
     private final EnrollmentRepository enrollmentRepository;
     private final AttendanceRepository attendanceRepository;
 
+    private static final SecureRandom PIN_RANDOM = new SecureRandom();
+
     @Transactional
     public AttendanceSessionDTO open(String username, OpenSessionRequest req) {
         FacultySection fs = facultyService.ownedSection(username, req.getFacultySectionId());
@@ -39,38 +42,40 @@ public class AttendanceSessionService {
 
         // Auto-close any still-OPEN sessions for this section before opening
         // a new one. Stops duplicate live sessions from cluttering students'
-        // portals when faculty re-opens during the same lecture.
-        sessionRepository.findByFacultySectionIdOrderByStartedAtDesc(fs.getId())
+        // portals when faculty re-opens during the same lecture. saveAll +
+        // flush guarantees the closes are persisted before the new session
+        // is saved, so a brief race won't leave two OPEN rows for one section.
+        List<AttendanceSession> stale = sessionRepository
+                .findByFacultySectionIdOrderByStartedAtDesc(fs.getId())
                 .stream()
                 .filter(s -> s.getStatus() == AttendanceSession.Status.OPEN)
-                .forEach(s -> {
-                    s.setStatus(AttendanceSession.Status.CLOSED);
-                    s.setClosedAt(now);
-                    sessionRepository.save(s);
-                });
-
-        // BLE device name MUST be provided — it's what students will pair to
-        // when they Connect Bluetooth. Whatever the teacher's device is
-        // currently broadcasting under (laptop name, phone name, beacon name).
-        String bleName = req.getBleDeviceName() == null ? null : req.getBleDeviceName().trim();
-        if (bleName == null || bleName.isEmpty()) {
-            throw new IllegalArgumentException("bleDeviceName is required — type the exact name your laptop/phone is broadcasting via Bluetooth.");
+                .toList();
+        for (AttendanceSession old : stale) {
+            old.setStatus(AttendanceSession.Status.CLOSED);
+            old.setClosedAt(now);
         }
+        if (!stale.isEmpty()) {
+            sessionRepository.saveAll(stale);
+            sessionRepository.flush();
+        }
+
+        // 6-digit numeric PIN. SecureRandom so it's not predictable.
+        String pinCode = String.format("%06d", PIN_RANDOM.nextInt(1_000_000));
 
         AttendanceSession s = new AttendanceSession();
         s.setFacultySection(fs);
         s.setLectureDate(LocalDate.now());
         s.setLectureNo(nextLectureNo(fs));
         s.setTopic(req.getTopic());
-        s.setSessionToken("BLE-" + fs.getCourse().getCode() + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase());
+        s.setSessionToken("PIN-" + fs.getCourse().getCode() + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase());
         s.setStartedAt(now);
         s.setEndsAt(now.plusSeconds(duration * 60L));
         s.setStatus(AttendanceSession.Status.OPEN);
         s.setDurationMinutes(duration);
-        s.setBleDeviceName(bleName);
+        s.setPinCode(pinCode);
         s.setLatitude(req.getLatitude());
         s.setLongitude(req.getLongitude());
-        s.setAllowedRadiusMeters(100);
+        s.setAllowedRadiusMeters(25);
         sessionRepository.save(s);
 
         return toDto(s);
@@ -97,13 +102,17 @@ public class AttendanceSessionService {
             var marked = attendanceRepository.findBySessionIdAndEnrollmentId(sessionId, e.getId());
             String presence = marked.map(Attendance::getPresence).orElse(null);
             String method = marked.map(Attendance::getMethod).orElse(null);
+            String deviceUuid = marked.map(Attendance::getDeviceUuid).orElse(null);
+            String clientIp = marked.map(Attendance::getClientIp).orElse(null);
             out.add(new SessionMarkDTO(
                     e.getId(),
                     e.getStudent().getRollNo(),
                     e.getStudent().getName(),
                     presence,
                     method,
-                    null));
+                    null,
+                    deviceUuid,
+                    clientIp));
         }
         return out;
     }
@@ -235,6 +244,7 @@ public class AttendanceSessionService {
                 s.getClosedAt(),
                 s.getStatus().name(),
                 s.getDurationMinutes(),
-                s.getBleDeviceName());
+                s.getBleDeviceName(),
+                s.getPinCode());
     }
 }
