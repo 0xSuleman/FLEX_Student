@@ -246,7 +246,7 @@ export default function Layout() {
                   )}
                 </button>
                 {showNotifs && (
-                  <div className="absolute top-full right-0 mt-2 w-80 bg-cream border-2 border-ink rounded-lg shadow-pixel overflow-hidden z-50 cascade-in">
+                  <div className="fixed sm:absolute top-14 sm:top-full inset-x-3 sm:inset-x-auto sm:right-0 mt-2 w-auto sm:w-80 bg-cream border-2 border-ink rounded-lg shadow-pixel overflow-hidden z-50 cascade-in">
                     <div className="bg-cocoa text-bone px-4 py-2.5 border-b-2 border-ink flex items-center justify-between">
                       <span className="font-display text-[9px] uppercase tracking-wider">Notifications</span>
                       {unreadCount > 0 && (
