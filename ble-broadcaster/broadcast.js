@@ -35,7 +35,15 @@ bleno.on('stateChange', (state) => {
   if (state === 'poweredOn') {
     if (started) return
     started = true
-    bleno.startAdvertising(localName, [serviceUuid], (err) => {
+    // IMPORTANT: don't advertise the 128-bit service UUID. A BLE advertising
+    // packet is 31 bytes total — a 128-bit UUID alone takes 18 of them,
+    // forcing the local name into the scan response. Most simple scanners
+    // (incl. iPhone Settings → Bluetooth) only show primary-advertisement
+    // data, so the device looks unnamed. Dropping the UUID list makes the
+    // name fit and lets every scanner see "FLEX-..." directly. The UUID is
+    // still registered as a GATT service below, so post-connect filtering
+    // by service UUID continues to work.
+    bleno.startAdvertising(localName, [], (err) => {
       if (err) {
         console.error('[ble] startAdvertising failed:', err)
         process.exit(1)

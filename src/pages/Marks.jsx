@@ -215,16 +215,17 @@ export default function Marks() {
                   <div key={g.type} className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: `${0.15 + gi * 0.05}s` }}>
                     <button
                       onClick={() => toggle(g.type)}
-                      className="w-full px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between hover:bg-tan/80 transition-colors"
+                      className="w-full px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between gap-2 hover:bg-tan/80 transition-colors"
                     >
-                      <h3 className="heading-retro text-sm">{g.label} ({g.items.length})</h3>
-                      <div className="flex items-center gap-3">
+                      <h3 className="heading-retro text-xs sm:text-sm truncate min-w-0">{g.label} ({g.items.length})</h3>
+                      <div className="flex items-center gap-3 shrink-0">
                         <span className="text-[10px] font-extrabold text-cocoa uppercase tracking-wider">Wt: {groupWeightage}%</span>
                         {isOpen ? <ChevronUp size={18} strokeWidth={3} /> : <ChevronDown size={18} strokeWidth={3} />}
                       </div>
                     </button>
                     {isOpen && (
-                      <table className="w-full text-sm">
+                      <div className="overflow-x-auto">
+                      <table className="w-full text-sm min-w-[760px]">
                         <thead>
                           <tr className="bg-bone border-b-2 border-ink text-coffee">
                             <th className="px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Eval</th>
@@ -262,6 +263,7 @@ export default function Marks() {
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     )}
                   </div>
                 )
@@ -272,13 +274,14 @@ export default function Marks() {
                 <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: `${0.15 + groups.length * 0.05}s` }}>
                   <button
                     onClick={() => toggle('GRAND')}
-                    className="w-full px-5 py-3.5 border-b-2 border-ink bg-cocoa flex items-center justify-between hover:bg-cocoa/80 transition-colors"
+                    className="w-full px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-cocoa flex items-center justify-between gap-2 hover:bg-cocoa/80 transition-colors"
                   >
-                    <h3 className="heading-retro text-sm text-bone">Grand Total</h3>
-                    {collapsed['GRAND'] ? <ChevronDown size={18} strokeWidth={3} className="text-bone" /> : <ChevronUp size={18} strokeWidth={3} className="text-bone" />}
+                    <h3 className="heading-retro text-xs sm:text-sm text-bone truncate min-w-0">Grand Total</h3>
+                    {collapsed['GRAND'] ? <ChevronDown size={18} strokeWidth={3} className="text-bone shrink-0" /> : <ChevronUp size={18} strokeWidth={3} className="text-bone shrink-0" />}
                   </button>
                   {!collapsed['GRAND'] && (
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[760px]">
                       <thead>
                         <tr className="bg-bone border-b-2 border-ink text-coffee">
                           <th className="px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Summary</th>
@@ -321,6 +324,7 @@ export default function Marks() {
                         )}
                       </tbody>
                     </table>
+                    </div>
                   )}
                 </div>
               )}

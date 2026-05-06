@@ -7,11 +7,7 @@ import {
   Users, Clock, AlertTriangle, ChevronRight, MessageSquare, Award,
 } from 'lucide-react'
 
-const FALLBACK_ASSIGNED = [
-  { code: 'CS3001', name: 'Software Engineering',  section: 'BSE-243A', enrolled: 42, room: 'C-204', day: 'Mon/Wed', time: '10:00–11:30' },
-  { code: 'CS3001', name: 'Software Engineering',  section: 'BSE-243B', enrolled: 38, room: 'C-204', day: 'Mon/Wed', time: '11:30–13:00' },
-  { code: 'CS5005', name: 'Software Architecture', section: 'MS-241',   enrolled: 18, room: 'D-301', day: 'Tue',     time: '18:00–21:00' },
-]
+const FALLBACK_ASSIGNED = []
 
 const TODAY = [
   { time: '10:00', course: 'CS3001 — BSE-243A', room: 'C-204', status: 'Upcoming' },
@@ -25,12 +21,7 @@ const PENDING_TASKS = [
   { type: 'ATTENDANCE',  count: 3, label: 'Sessions awaiting topic', link: '/faculty/attendance',  tone: 'tan' },
 ]
 
-const LOW_ATT = [
-  { roll: '24L-3081', name: 'Shahzaib Saeed',   course: 'CS3001-A', pct: 68 },
-  { roll: '24L-3072', name: 'Suleman Ahmed',    course: 'CS3001-A', pct: 71 },
-  { roll: '24L-3051', name: 'Mustafa Salman',   course: 'CS3001-B', pct: 73 },
-  { roll: '24L-3034', name: 'Hammad Mushtaq',   course: 'CS3001-B', pct: 74 },
-]
+const LOW_ATT = []
 
 export default function FacultyDashboard() {
   const navigate = useNavigate()

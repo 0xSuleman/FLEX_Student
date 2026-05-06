@@ -112,9 +112,9 @@ export default function PloMarks() {
 
       {/* RADAR CHART */}
       <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.2s' }}>
-        <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
-          <h3 className="heading-retro text-sm">Radar Chart</h3>
-          <Radar size={14} className="text-ink" />
+        <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between gap-2">
+          <h3 className="heading-retro text-xs sm:text-sm truncate min-w-0">Radar Chart</h3>
+          <Radar size={14} className="text-ink shrink-0" />
         </div>
         <div className="p-6 flex items-center justify-center bg-bone/40">
           <svg viewBox="0 0 400 400" className="w-full max-w-[480px]">
@@ -159,10 +159,11 @@ export default function PloMarks() {
 
       {/* MAPPING TABLE */}
       <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.25s' }}>
-        <div className="px-5 py-3.5 border-b-2 border-ink bg-tan">
-          <h3 className="heading-retro text-sm">PLO Mapping</h3>
+        <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-tan">
+          <h3 className="heading-retro text-xs sm:text-sm truncate min-w-0">PLO Mapping</h3>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[600px]">
           <thead>
             <tr className="bg-bone border-b-2 border-ink text-coffee">
               <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">PLO</th>
@@ -189,6 +190,7 @@ export default function PloMarks() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )

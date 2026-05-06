@@ -113,11 +113,12 @@ export default function StudyPlan() {
           const total = sem.courses.reduce((s, c) => s + c.cr, 0)
           return (
             <div key={sem.sem} className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: `${0.1 + si * 0.04}s` }}>
-              <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
-                <h3 className="heading-retro text-sm">Semester {sem.sem}</h3>
-                <span className="text-xs font-bold text-ink uppercase tracking-wider">{total} CR</span>
+              <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between gap-2">
+                <h3 className="heading-retro text-xs sm:text-sm truncate min-w-0">Semester {sem.sem}</h3>
+                <span className="text-xs font-bold text-ink uppercase tracking-wider shrink-0">{total} CR</span>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[520px]">
                 <thead>
                   <tr className="bg-bone border-b-2 border-ink text-coffee">
                     <th className="px-3 py-2 text-left text-[10px] font-extrabold uppercase tracking-widest">Code</th>
@@ -141,6 +142,7 @@ export default function StudyPlan() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )
         })}

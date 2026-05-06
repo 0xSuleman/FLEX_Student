@@ -189,7 +189,7 @@ export default function Layout() {
         {/* MAIN */}
         <main className="flex-1 min-w-0 flex flex-col">
           {/* breadcrumb */}
-          <div className="border-b-2 border-ink bg-cocoa px-4 md:px-6 py-3.5 flex items-center justify-between gap-3 sticky top-0 z-30">
+          <div className="border-b-2 border-ink bg-cocoa px-3 sm:px-4 md:px-6 py-3 md:py-3.5 flex items-center justify-between gap-2 sticky top-0 z-30">
             <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider min-w-0">
               <button onClick={() => setMobileNavOpen(true)}
                 className="lg:hidden bg-coffee/60 border-2 border-ink rounded-md p-1.5 shadow-pixel-sm">
@@ -290,25 +290,25 @@ export default function Layout() {
           </div>
 
           {/* page content */}
-          <div className="p-6 pt-10 flex-1">
+          <div className="px-3 py-5 sm:px-4 sm:py-6 md:p-6 md:pt-10 flex-1 min-w-0">
             <Outlet />
           </div>
 
           {/* footer */}
-          <div className="border-t-2 border-ink bg-cocoa text-bone px-6 py-2 flex items-center justify-between text-xs font-bold uppercase tracking-wider">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5">
+          <div className="border-t-2 border-ink bg-cocoa text-bone px-3 sm:px-6 py-2 flex items-center justify-between text-[10px] sm:text-xs font-bold uppercase tracking-wider gap-2">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-wrap">
+              <span className="flex items-center gap-1.5 shrink-0">
                 <span className="w-2 h-2 bg-mossL rounded-sm animate-blink" />
                 Connected
               </span>
-              <span>·</span>
-              <span>{STUDENT.rollNo}</span>
-              <span>·</span>
-              <span>{STUDENT.section}</span>
-              <span>·</span>
-              <span>{STUDENT.campus}</span>
+              <span className="hidden sm:inline">·</span>
+              <span className="truncate">{STUDENT.rollNo}</span>
+              <span className="hidden sm:inline">·</span>
+              <span className="hidden sm:inline truncate">{STUDENT.section}</span>
+              <span className="hidden md:inline">·</span>
+              <span className="hidden md:inline truncate">{STUDENT.campus}</span>
             </div>
-            <div>NUKED v1.0.90</div>
+            <div className="shrink-0">v1.0.90</div>
           </div>
         </main>
       </div>

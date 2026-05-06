@@ -91,8 +91,8 @@ export default function FeeChallan() {
 
       {/* GENERATE */}
       <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.05s' }}>
-        <div className="px-5 py-3.5 border-b-2 border-ink bg-tan">
-          <h3 className="heading-retro text-sm">Generate New Challan</h3>
+        <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-tan">
+          <h3 className="heading-retro text-xs sm:text-sm truncate min-w-0">Generate New Challan</h3>
         </div>
         <div className="p-5 flex flex-wrap gap-3 items-end">
           <div>
@@ -143,10 +143,11 @@ export default function FeeChallan() {
 
       {/* CHALLAN LIST */}
       <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.2s' }}>
-        <div className="px-5 py-3.5 border-b-2 border-ink bg-tan">
-          <h3 className="heading-retro text-sm">All Challans</h3>
+        <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-tan">
+          <h3 className="heading-retro text-xs sm:text-sm truncate min-w-0">All Challans</h3>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[680px]">
           <thead>
             <tr className="bg-bone border-b-2 border-ink text-coffee">
               <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Challan No</th>
@@ -174,6 +175,7 @@ export default function FeeChallan() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )

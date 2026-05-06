@@ -117,8 +117,8 @@ export default function FeeDetails() {
         <>
           {/* SUMMARY */}
           <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.1s' }}>
-            <div className="px-5 py-3.5 border-b-2 border-ink bg-tan">
-              <h3 className="heading-retro text-sm">Summary {selectedChallan && `— ${selectedChallan.no}`}</h3>
+            <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-tan">
+              <h3 className="heading-retro text-xs sm:text-sm truncate min-w-0">Summary {selectedChallan && `— ${selectedChallan.no}`}</h3>
             </div>
             <div className="p-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <SummaryBox label="Arrears" value={summary.arrears} color="text-cocoa" />
@@ -132,11 +132,11 @@ export default function FeeDetails() {
 
           {/* LINE ITEMS */}
           <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.15s' }}>
-            <div className="px-5 py-3.5 border-b-2 border-ink bg-tan">
-              <h3 className="heading-retro text-sm">Line Items</h3>
+            <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-tan">
+              <h3 className="heading-retro text-xs sm:text-sm truncate min-w-0">Line Items</h3>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[760px]">
                 <thead>
                   <tr className="bg-bone border-b-2 border-ink text-coffee">
                     <th className="px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Description</th>

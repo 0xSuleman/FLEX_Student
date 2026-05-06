@@ -129,15 +129,16 @@ export default function GradeChange() {
       </div>
 
       <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.15s' }}>
-        <div className="px-5 py-3.5 border-b-2 border-ink bg-tan">
-          <h3 className="heading-retro text-sm">Courses — {semester}</h3>
+        <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-tan">
+          <h3 className="heading-retro text-xs sm:text-sm truncate min-w-0">Courses — {semester}</h3>
         </div>
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <div className="w-10 h-10 border-4 border-ink border-t-burn rounded-full animate-spin" />
           </div>
         ) : (
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[680px]">
           <thead>
             <tr className="bg-bone border-b-2 border-ink text-coffee">
               <th className="px-5 py-2.5 text-center text-[10px] font-extrabold uppercase tracking-widest w-12">Pick</th>
@@ -178,6 +179,7 @@ export default function GradeChange() {
             })}
           </tbody>
         </table>
+        </div>
         )}
       </div>
 

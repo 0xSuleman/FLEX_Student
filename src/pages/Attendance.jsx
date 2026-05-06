@@ -155,9 +155,9 @@ export default function Attendance() {
           {/* COURSE DETAIL */}
           {course && (
             <div className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: '0.15s' }}>
-              <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
-                <h3 className="heading-retro text-sm">{course.code} — {course.name}</h3>
-                <span className={`tag text-sm ${course.percentage >= 80 ? 'bg-moss text-cream' : 'bg-bad text-bone'}`}>
+              <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between gap-2">
+                <h3 className="heading-retro text-xs sm:text-sm truncate min-w-0">{course.code} — {course.name}</h3>
+                <span className={`tag text-xs sm:text-sm shrink-0 ${course.percentage >= 80 ? 'bg-moss text-cream' : 'bg-bad text-bone'}`}>
                   {course.percentage}%
                 </span>
               </div>
@@ -188,7 +188,8 @@ export default function Attendance() {
               </div>
 
               {/* Lecture table */}
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[480px]">
                 <thead>
                   <tr className="bg-bone border-b-2 border-ink text-coffee">
                     <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">#</th>
@@ -216,9 +217,10 @@ export default function Attendance() {
                   ))}
                 </tbody>
               </table>
+              </div>
 
               {/* Note */}
-              <div className="px-5 py-3 border-t-2 border-ink bg-bone/50 flex items-center gap-2 text-xs text-cocoa font-bold">
+              <div className="px-4 sm:px-5 py-3 border-t-2 border-ink bg-bone/50 flex items-start sm:items-center gap-2 text-[11px] sm:text-xs text-cocoa font-bold">
                 <Info size={12} className="text-rust" />
                 Attendance is updated with a 24-hour delay. Contact your instructor for any discrepancies.
               </div>

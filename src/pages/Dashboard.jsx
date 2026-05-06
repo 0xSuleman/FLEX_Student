@@ -269,8 +269,8 @@ export default function Dashboard() {
       {/* LEFT */}
       <div className="col-span-12 xl:col-span-8 space-y-5">
         {/* welcome + compact calendar */}
-        <div className="flex items-start justify-between gap-6">
-          <div>
+        <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5 xl:gap-6">
+          <div className="min-w-0">
             <div className="text-sm font-bold text-coffee uppercase tracking-wider">
               {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).replace(',', ' ·')}
             </div>
@@ -385,11 +385,12 @@ export default function Dashboard() {
 
         {/* ENROLLED COURSES */}
         <div className="chunky-card overflow-hidden">
-          <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
-            <h3 className="heading-retro text-sm">Enrolled Courses — Spring 2026</h3>
-            <span className="text-xs font-bold text-ink uppercase tracking-wider">{enrolledCourses.reduce((s, c) => s + c.cr, 0)} CR</span>
+          <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between gap-2">
+            <h3 className="heading-retro text-xs sm:text-sm truncate">Enrolled Courses — Spring 2026</h3>
+            <span className="text-[10px] sm:text-xs font-bold text-ink uppercase tracking-wider shrink-0">{enrolledCourses.reduce((s, c) => s + c.cr, 0)} CR</span>
           </div>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="bg-bone border-b-2 border-ink text-coffee">
                 <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Code</th>
@@ -415,15 +416,17 @@ export default function Dashboard() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* RECENT MARKS */}
         <div className="chunky-card overflow-hidden">
-          <div className="px-5 py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between">
-            <h3 className="heading-retro text-sm">Recent Evaluations</h3>
-            <span className="text-xs font-bold text-ink uppercase tracking-wider">Latest 4</span>
+          <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b-2 border-ink bg-tan flex items-center justify-between gap-2">
+            <h3 className="heading-retro text-xs sm:text-sm truncate">Recent Evaluations</h3>
+            <span className="text-[10px] sm:text-xs font-bold text-ink uppercase tracking-wider shrink-0">Latest 4</span>
           </div>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
             <thead>
               <tr className="bg-bone border-b-2 border-ink text-coffee">
                 <th className="px-5 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Course</th>
@@ -452,6 +455,7 @@ export default function Dashboard() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
 
       </div>
@@ -511,7 +515,8 @@ export default function Dashboard() {
             <h3 className="heading-retro text-sm">Family Information</h3>
             <User size={14} className="text-ink" />
           </div>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[360px]">
             <thead>
               <tr className="bg-bone border-b-2 border-ink text-coffee">
                 <th className="px-3 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-widest">Relation</th>
@@ -531,6 +536,7 @@ export default function Dashboard() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* SYSTEM — at bottom */}
@@ -661,7 +667,7 @@ function DashboardCalendar() {
   while (cells.length % 7 !== 0) cells.push({ d: next++, muted: true })
 
   return (
-    <div className="bg-cream border-2 border-ink rounded-lg shadow-pixel overflow-hidden cascade-in shrink-0 w-[260px]" style={{ animationDelay: '0.05s' }}>
+    <div className="bg-cream border-2 border-ink rounded-lg shadow-pixel overflow-hidden cascade-in shrink-0 w-full xl:w-[260px] max-w-full" style={{ animationDelay: '0.05s' }}>
       <div className="bg-cocoa border-b-2 border-ink px-3 py-2 flex items-center justify-between">
         <button onClick={goPrev} className="transition-all text-bone/80 hover:text-burn hover:-translate-x-0.5">
           <ChevronLeft size={16} strokeWidth={3} />

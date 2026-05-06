@@ -90,10 +90,11 @@ export default function GradeReport() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {semesters.map((sem, si) => (
           <div key={sem.name} className="chunky-card overflow-hidden cascade-in" style={{ animationDelay: `${0.05 + si * 0.05}s` }}>
-            <div className="px-4 py-3 border-b-2 border-ink bg-tan">
-              <h3 className="heading-retro text-sm">{sem.name}</h3>
+            <div className="px-4 sm:px-4 py-3 border-b-2 border-ink bg-tan">
+              <h3 className="heading-retro text-xs sm:text-sm truncate min-w-0">{sem.name}</h3>
             </div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[420px]">
               <thead>
                 <tr className="bg-bone border-b-2 border-ink text-coffee">
                   <th className="px-3 py-2 text-left text-[10px] font-extrabold uppercase tracking-widest">Course</th>
@@ -114,6 +115,7 @@ export default function GradeReport() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         ))}
       </div>

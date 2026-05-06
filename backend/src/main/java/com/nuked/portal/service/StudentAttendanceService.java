@@ -14,6 +14,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.text.Normalizer;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -83,18 +84,20 @@ public class StudentAttendanceService {
 
         // Real proximity check: the BLE device the student paired with MUST
         // equal the name the teacher registered when opening the session.
-        // Anything else = student isn't connected to the teacher's device.
+        // Names are normalized first — curly vs straight quotes, casing, and
+        // surrounding whitespace shouldn't cause false mismatches when the
+        // strings are visually identical.
         String expected = session.getBleDeviceName();
-        String reported = reportedBleDeviceName == null ? null : reportedBleDeviceName.trim();
-        if (expected == null || expected.isEmpty()) {
+        String reported = reportedBleDeviceName;
+        if (expected == null || expected.trim().isEmpty()) {
             throw new RuntimeException("Session has no registered BLE device name — re-open the session.");
         }
-        if (reported == null || reported.isEmpty()) {
+        if (reported == null || reported.trim().isEmpty()) {
             throw new RuntimeException("Connect Bluetooth first — attendance cannot be marked without a paired device.");
         }
-        if (!expected.equalsIgnoreCase(reported)) {
-            throw new RuntimeException("BLE device mismatch — you connected to '" + reported
-                    + "' but this session is bound to '" + expected
+        if (!normalizeName(expected).equals(normalizeName(reported))) {
+            throw new RuntimeException("BLE device mismatch — you connected to '" + reported.trim()
+                    + "' but this session is bound to '" + expected.trim()
                     + "'. Pair with the teacher's device.");
         }
 
@@ -152,6 +155,32 @@ public class StudentAttendanceService {
                 session.getSessionToken(),
                 true,
                 session.getBleDeviceName());
+    }
+
+    /**
+     * Aggressively normalize a BLE device name so visually-identical names
+     * compare equal. Handles every common source of false mismatches:
+     *   - case differences ("MacBook Air" vs "macbook air")
+     *   - curly vs straight apostrophes/quotes (Apple injects U+2019)
+     *   - non-breaking spaces, narrow no-break spaces, em/en spaces
+     *   - zero-width chars (joiners, BOM, soft-hyphen)
+     *   - leading/trailing whitespace + collapsed runs of inner whitespace
+     *   - NFKC unicode form so wide/compatibility variants fold
+     *   - all remaining punctuation stripped — only letters/digits/spaces remain
+     * Net effect: only the *visible word content* matters.
+     */
+    private static String normalizeName(String s) {
+        if (s == null) return "";
+        // Unicode compatibility decomposition fold ("ｍａｃ" → "mac" etc).
+        String n = Normalizer.normalize(s, Normalizer.Form.NFKC);
+        // Strip zero-width / format characters.
+        n = n.replaceAll("[\\u200B-\\u200F\\uFEFF\\u00AD]", "");
+        // Replace any unicode whitespace (NBSP etc) with a regular space.
+        n = n.replaceAll("\\p{Z}|\\s", " ");
+        // Drop punctuation entirely so apostrophes/dashes/dots can't differ.
+        n = n.replaceAll("[\\p{P}\\p{S}]", "");
+        // Collapse runs of spaces and lowercase + trim.
+        return n.replaceAll(" +", " ").trim().toLowerCase();
     }
 
     /** Haversine great-circle distance between two lat/long points, in meters. */

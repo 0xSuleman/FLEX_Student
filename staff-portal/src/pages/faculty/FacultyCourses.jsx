@@ -2,28 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { BookOpen, Users, FileSpreadsheet, FileText, Search, ChevronRight } from 'lucide-react'
 import api from '../../services/api'
 
-const FN = ['Ali','Hassan','Ahmed','Fatima','Aisha','Bilal','Sara','Hamza','Zainab','Usman','Maryam','Owais','Hira','Ibrahim','Mehwish','Talha','Sana','Saad','Iqra','Abdullah','Noor','Faizan','Areeba','Kamran','Laiba','Moiz','Rabia','Salman','Tehreem','Umar','Wajiha','Yasir','Zara','Adeel','Samra','Rehan','Nimra','Junaid','Komal','Bushra']
-const LN = ['Ahmed','Khan','Shah','Malik','Hussain','Tariq','Akhtar','Saeed','Mehmood','Salman','Mushtaq','Ashraf','Iqbal','Javed','Raza','Latif','Bashir','Sultan','Anjum','Yousuf']
-
-function fakeRoster(prefix, n, program = 'BS(SE)') {
-  return Array.from({ length: n }, (_, i) => ({
-    enrollmentId: -((prefix === 'cs3001-b' ? 100 : 0) + i + 1),
-    roll: `24L-${3000 + i + (prefix === 'cs3001-b' ? 50 : 0)}`,
-    name: `${FN[i % FN.length]} ${LN[(i * 3) % LN.length]}`,
-    program,
-  }))
-}
-
-const FALLBACK_SECTIONS = [
-  { id: 1, code: 'CS3001', name: 'Software Engineering',  section: 'BSE-243A', enrolled: 7,  room: 'C-204', day: 'Mon/Wed', time: '10:00–11:30', roster: fakeRoster('cs3001-a', 7) },
-  { id: 2, code: 'CS3001', name: 'Software Engineering',  section: 'BSE-243B', enrolled: 7,  room: 'C-204', day: 'Mon/Wed', time: '11:30–13:00', roster: fakeRoster('cs3001-b', 7) },
-  { id: 3, code: 'CS5005', name: 'Software Architecture', section: 'MS-241',   enrolled: 18, room: 'D-301', day: 'Tue',     time: '18:00–21:00', roster: fakeRoster('cs5005', 18, 'MS(SE)') },
-]
-
 export default function FacultyCourses() {
-  const [sections, setSections] = useState(FALLBACK_SECTIONS)
-  const [activeId, setActiveId] = useState(FALLBACK_SECTIONS[0].id)
-  const [activeRoster, setActiveRoster] = useState(FALLBACK_SECTIONS[0].roster)
+  const [sections, setSections] = useState([])
+  const [activeId, setActiveId] = useState(null)
+  const [activeRoster, setActiveRoster] = useState([])
   const [search, setSearch] = useState('')
   const [loadingRoster, setLoadingRoster] = useState(false)
 
@@ -34,7 +16,6 @@ export default function FacultyCourses() {
       .then(res => {
         if (cancelled) return
         const arr = Array.isArray(res.data) ? res.data : []
-        if (arr.length === 0) return
         const mapped = arr.map(s => ({
           id: s.id,
           code: s.courseCode,
@@ -47,9 +28,9 @@ export default function FacultyCourses() {
           roster: null,
         }))
         setSections(mapped)
-        setActiveId(mapped[0].id)
+        if (mapped.length > 0) setActiveId(mapped[0].id)
       })
-      .catch(() => { /* fall back to mock */ })
+      .catch(() => { setSections([]) })
     return () => { cancelled = true }
   }, [])
 

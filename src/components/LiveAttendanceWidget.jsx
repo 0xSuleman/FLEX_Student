@@ -4,6 +4,24 @@ import api from '../services/api'
 
 const POLL_MS = 8000
 
+// Aggressively normalize a BLE device name so visually-identical names compare
+// equal. Mirrors StudentAttendanceService.normalizeName on the backend so the
+// pre-flight UI never disagrees with the server.
+//   - NFKC unicode fold (wide chars, compat forms)
+//   - strip zero-width / format chars
+//   - any unicode whitespace (NBSP etc) → regular space
+//   - drop ALL punctuation/symbols (apostrophes, dashes, dots, ®, …)
+//   - collapse runs of spaces, lowercase, trim
+function normalizeBleName(s) {
+  if (!s) return ''
+  let n = s.normalize ? s.normalize('NFKC') : s
+  n = n.replace(/[​-‏﻿­]/g, '')
+  n = n.replace(/\s+/g, ' ')
+  // Drop punctuation and symbols. \p{P}\p{S} requires the /u flag.
+  n = n.replace(/[\p{P}\p{S}]/gu, '')
+  return n.replace(/ +/g, ' ').trim().toLowerCase()
+}
+
 export default function LiveAttendanceWidget() {
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -125,7 +143,7 @@ export default function LiveAttendanceWidget() {
     // Pre-flight check: warn the student if they paired with a device whose
     // name doesn't match this session's expected name. Backend will reject too,
     // but failing fast on the client gives a clearer message.
-    if (s.bleDeviceName && bleDevice.name && s.bleDeviceName.toLowerCase() !== bleDevice.name.toLowerCase()) {
+    if (s.bleDeviceName && bleDevice.name && normalizeBleName(s.bleDeviceName) !== normalizeBleName(bleDevice.name)) {
       setToast({ kind: 'err', text: `You're connected to "${bleDevice.name}" but this session needs "${s.bleDeviceName}". Disconnect and pair with the right classroom device.` })
       setMarking(null)
       setTimeout(() => setToast(null), 5000)
@@ -192,8 +210,9 @@ export default function LiveAttendanceWidget() {
   // that matches what the student paired with?
   const expectedNames = sessions.map(s => s.bleDeviceName).filter(Boolean)
   const connectedName = bleDevice?.name || ''
+  const connectedNorm = normalizeBleName(connectedName)
   const nameMatchesAnySession = expectedNames.length === 0
-    || expectedNames.some(n => n.toLowerCase() === connectedName.toLowerCase())
+    || expectedNames.some(n => normalizeBleName(n) === connectedNorm)
   const showMismatchWarning = bleConnected && !nameMatchesAnySession && expectedNames.length > 0
 
   return (
@@ -205,11 +224,11 @@ export default function LiveAttendanceWidget() {
             : !bleSupported ? <BluetoothOff size={16} className="text-bone" strokeWidth={2.8} />
             : <Bluetooth size={16} className="text-bone" strokeWidth={2.8} />}
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 basis-0">
           <div className="font-display text-[11px] uppercase tracking-widest text-ink">
             BLE Status
           </div>
-          <div className="text-[11px] text-cocoa font-bold mt-0.5">
+          <div className="text-[11px] text-cocoa font-bold mt-0.5 break-words">
             {!bleSupported
               ? 'Bluetooth not available in this browser. Use Chrome or Edge.'
               : !bleAdapterOn
@@ -219,13 +238,13 @@ export default function LiveAttendanceWidget() {
                       ? 'Bluetooth is on. No live session yet — when your teacher opens one, pair with their device.'
                       : 'Bluetooth is on. Click "Pair Device" and pick the device your teacher named.'))
                   : showMismatchWarning
-                    ? <>Paired with <span className="font-mono text-ink">{connectedName || 'device'}</span>, but the teacher's device is <span className="font-mono text-ink">{expectedNames.join(' / ')}</span>. Disconnect and pair with that one.</>
+                    ? <>Paired with <span className="font-mono text-ink break-all">{connectedName || 'device'}</span>, but the teacher's device is <span className="font-mono text-ink break-all">{expectedNames.join(' / ')}</span>. Disconnect and pair with that one.</>
                     : sessions.length === 0
-                      ? <>Paired with <span className="font-mono text-ink">{connectedName || 'device'}</span>. Waiting for your teacher to open a session.</>
-                      : <>Paired with <span className="font-mono text-ink">{connectedName || 'device'}</span>. You can mark attendance now.</>}
+                      ? <>Paired with <span className="font-mono text-ink break-all">{connectedName || 'device'}</span>. Waiting for your teacher to open a session.</>
+                      : <>Paired with <span className="font-mono text-ink break-all">{connectedName || 'device'}</span>. You can mark attendance now.</>}
           </div>
         </div>
-        <div className="shrink-0 flex items-center gap-2">
+        <div className="w-full sm:w-auto shrink-0 flex items-center gap-2 flex-wrap justify-end">
           <span className={`tag ${showMismatchWarning ? 'bg-bad text-bone' : bleConnected ? 'bg-moss text-cream' : !bleAdapterOn ? 'bg-bad text-bone' : 'bg-mustard text-ink'}`}>
             {bleConnected ? (showMismatchWarning ? 'WRONG DEVICE' : 'CONNECTED') : !bleAdapterOn ? 'BLUETOOTH OFF' : 'NOT PAIRED'}
           </span>
@@ -262,15 +281,15 @@ export default function LiveAttendanceWidget() {
         const remainingMin = Math.floor(remainingMs / 60000)
         const remainingSec = Math.floor((remainingMs % 60000) / 1000)
         const expired = remainingMs <= 0
-        const nameMatch = !s.bleDeviceName || (connectedName && s.bleDeviceName.toLowerCase() === connectedName.toLowerCase())
+        const nameMatch = !s.bleDeviceName || (connectedName && normalizeBleName(s.bleDeviceName) === normalizeBleName(connectedName))
         const canMark = bleConnected && !expired && !s.alreadyMarked && nameMatch
         return (
-          <div key={s.sessionId} className={`chunky-card p-4 cascade-in ${s.alreadyMarked ? 'bg-moss/10 border-moss' : 'border-burn ring-2 ring-burn/30'}`}>
-            <div className="flex items-start gap-4 flex-wrap">
-              <div className="w-12 h-12 bg-burn border-2 border-ink shadow-pixel-sm rounded-md flex items-center justify-center shrink-0">
+          <div key={s.sessionId} className={`chunky-card p-3 sm:p-4 cascade-in ${s.alreadyMarked ? 'bg-moss/10 border-moss' : 'border-burn ring-2 ring-burn/30'}`}>
+            <div className="flex items-start gap-3 sm:gap-4 flex-wrap">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-burn border-2 border-ink shadow-pixel-sm rounded-md flex items-center justify-center shrink-0">
                 <Bluetooth size={20} className="text-bone" strokeWidth={2.8} />
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 basis-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-display text-sm text-ink uppercase tracking-wider">{s.courseCode}</span>
                   <span className="tag bg-coffee text-bone">{s.section}</span>
@@ -278,25 +297,25 @@ export default function LiveAttendanceWidget() {
                     ? <span className="tag bg-moss text-cream">✓ MARKED</span>
                     : <span className="tag bg-burn text-bone animate-blink">LIVE</span>}
                 </div>
-                <div className="text-xs font-bold text-cocoa mt-1">{s.courseName}</div>
-                {s.topic && <div className="text-[11px] text-cocoa/80 italic mt-0.5">&gt; {s.topic}</div>}
-                <div className="flex items-center gap-3 mt-2 text-[11px] font-bold text-cocoa uppercase tracking-wider flex-wrap">
+                <div className="text-xs font-bold text-cocoa mt-1 break-words">{s.courseName}</div>
+                {s.topic && <div className="text-[11px] text-cocoa/80 italic mt-0.5 break-words">&gt; {s.topic}</div>}
+                <div className="flex items-center gap-2 sm:gap-3 mt-2 text-[11px] font-bold text-cocoa uppercase tracking-wider flex-wrap">
                   <span className="flex items-center gap-1"><Radio size={11} strokeWidth={3} /> {s.sessionToken}</span>
                   <span className="flex items-center gap-1"><Clock size={11} strokeWidth={3} /> {expired ? 'expired' : `${remainingMin}:${remainingSec.toString().padStart(2,'0')} left`}</span>
                   {s.bleDeviceName && (
-                    <span className="flex items-center gap-1 text-burn">
-                      <Bluetooth size={11} strokeWidth={3} /> Connect to: <span className="font-mono bg-bone border-2 border-ink rounded px-1.5 py-0.5 text-ink">{s.bleDeviceName}</span>
+                    <span className="flex items-center gap-1 text-burn flex-wrap">
+                      <Bluetooth size={11} strokeWidth={3} /> Connect to: <span className="font-mono bg-bone border-2 border-ink rounded px-1.5 py-0.5 text-ink break-all">{s.bleDeviceName}</span>
                     </span>
                   )}
                 </div>
               </div>
-              <div className="ml-auto">
+              <div className="w-full sm:w-auto sm:ml-auto">
                 {s.alreadyMarked ? (
-                  <div className="bg-moss text-cream border-2 border-ink rounded-md px-4 py-2.5 font-display text-xs uppercase tracking-wider shadow-pixel-sm inline-flex items-center gap-2">
+                  <div className="w-full sm:w-auto bg-moss text-cream border-2 border-ink rounded-md px-4 py-2.5 font-display text-xs uppercase tracking-wider shadow-pixel-sm inline-flex items-center justify-center gap-2">
                     <CheckCircle2 size={14} strokeWidth={3} /> Present
                   </div>
                 ) : expired ? (
-                  <div className="bg-cocoa text-bone border-2 border-ink rounded-md px-4 py-2.5 font-display text-xs uppercase tracking-wider shadow-pixel-sm">
+                  <div className="w-full sm:w-auto bg-cocoa text-bone border-2 border-ink rounded-md px-4 py-2.5 font-display text-xs uppercase tracking-wider shadow-pixel-sm text-center">
                     Window Closed
                   </div>
                 ) : (
@@ -304,7 +323,7 @@ export default function LiveAttendanceWidget() {
                     disabled={marking === s.sessionId || !canMark}
                     onClick={() => mark(s)}
                     title={canMark ? 'Mark Present' : (!bleConnected ? 'Connect Bluetooth first' : !nameMatch ? `Pair with ${s.bleDeviceName}` : 'Cannot mark')}
-                    className="bg-bone text-ink border-2 border-ink rounded-md px-4 py-2.5 font-display text-xs uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto bg-bone text-ink border-2 border-ink rounded-md px-4 py-2.5 font-display text-xs uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {marking === s.sessionId ? (
                       <>
