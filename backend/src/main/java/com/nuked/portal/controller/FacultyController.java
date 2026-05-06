@@ -75,6 +75,12 @@ public class FacultyController {
         return ResponseEntity.ok(sessionService.close(auth.getName(), id, req));
     }
 
+    @DeleteMapping("/attendance/sessions/{id}")
+    public ResponseEntity<Void> deleteSession(Authentication auth, @PathVariable Long id) {
+        sessionService.deleteSession(auth.getName(), id);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Update P/A/L on a past closed session (req 4.2.4). */
     @PutMapping("/attendance/sessions/{id}/marks")
     public ResponseEntity<AttendanceSessionDTO> updateSessionMarks(Authentication auth,

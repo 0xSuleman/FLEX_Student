@@ -30,7 +30,8 @@ public class StudentAttendanceService {
 
     public List<OpenSessionForStudentDTO> openSessionsForStudent(String rollNo) {
         Student student = studentRepository.findByRollNo(rollNo)
-                .orElseThrow(() -> new AccessDeniedException("Unknown student: " + rollNo));
+                .orElseThrow(() -> new AccessDeniedException(
+                        "Your account isn't registered. Sign out and sign back in — if it still fails, contact your faculty."));
 
         // Look across the student's *current* (Spring 2026) enrollments.
         List<Enrollment> enrollments = enrollmentRepository.findByStudentIdAndSemester(student.getId(), "Spring 2026");
@@ -44,24 +45,32 @@ public class StudentAttendanceService {
                             e.getCourse().getId(),
                             e.getSection(),
                             e.getSemester());
+            // Defense in depth: even if multiple OPEN sessions slip through
+            // (auto-close race, prior-branch leftovers), only surface the
+            // single most-recent unexpired one to the student.
+            AttendanceSession latest = null;
             for (AttendanceSession s : open) {
-                if (s.getEndsAt() != null && s.getEndsAt().isBefore(now)) continue; // past expiry
-                boolean alreadyMarked = attendanceRepository
-                        .findBySessionIdAndEnrollmentId(s.getId(), e.getId()).isPresent();
-                out.add(new OpenSessionForStudentDTO(
-                        s.getId(),
-                        e.getId(),
-                        e.getCourse().getCode(),
-                        e.getCourse().getName(),
-                        e.getSection(),
-                        s.getTopic(),
-                        s.getLectureDate(),
-                        s.getStartedAt(),
-                        s.getEndsAt(),
-                        s.getSessionToken(),
-                        alreadyMarked,
-                        s.getBleDeviceName()));
+                if (s.getEndsAt() != null && s.getEndsAt().isBefore(now)) continue;
+                if (latest == null || s.getStartedAt().isAfter(latest.getStartedAt())) {
+                    latest = s;
+                }
             }
+            if (latest == null) continue;
+            boolean alreadyMarked = attendanceRepository
+                    .findBySessionIdAndEnrollmentId(latest.getId(), e.getId()).isPresent();
+            out.add(new OpenSessionForStudentDTO(
+                    latest.getId(),
+                    e.getId(),
+                    e.getCourse().getCode(),
+                    e.getCourse().getName(),
+                    e.getSection(),
+                    latest.getTopic(),
+                    latest.getLectureDate(),
+                    latest.getStartedAt(),
+                    latest.getEndsAt(),
+                    latest.getSessionToken(),
+                    alreadyMarked,
+                    latest.getBleDeviceName()));
         }
         return out;
     }
@@ -69,36 +78,44 @@ public class StudentAttendanceService {
     @Transactional
     public OpenSessionForStudentDTO markPresent(String rollNo, Long sessionId,
                                                 String reportedBleDeviceName,
-                                                Double studentLat, Double studentLon) {
+                                                Double studentLat, Double studentLon,
+                                                String deviceUuid, String clientIp,
+                                                String clientFingerprint) {
         Student student = studentRepository.findByRollNo(rollNo)
-                .orElseThrow(() -> new AccessDeniedException("Unknown student: " + rollNo));
+                .orElseThrow(() -> new AccessDeniedException(
+                        "Your account isn't registered. Sign out and sign back in — if it still fails, ask your faculty to check your enrollment."));
         AttendanceSession session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new RuntimeException("Session not found"));
+                .orElseThrow(() -> new RuntimeException(
+                        "This attendance session no longer exists. Refresh and try again."));
 
         if (session.getStatus() != AttendanceSession.Status.OPEN) {
-            throw new RuntimeException("Session is not open");
+            throw new RuntimeException(
+                    "The teacher has already closed this attendance session. Ask them to open a new one.");
         }
         if (session.getEndsAt() != null && session.getEndsAt().isBefore(Instant.now())) {
-            throw new RuntimeException("Session window has expired");
+            throw new RuntimeException(
+                    "The attendance window for this session has expired. Ask your teacher to open a new session.");
         }
 
-        // Real proximity check: the BLE device the student paired with MUST
+        // BLE proximity check: the BLE device the student paired with MUST
         // equal the name the teacher registered when opening the session.
-        // Names are normalized first — curly vs straight quotes, casing, and
-        // surrounding whitespace shouldn't cause false mismatches when the
-        // strings are visually identical.
+        // Names are normalized first — curly vs straight quotes, casing,
+        // and surrounding whitespace shouldn't cause false mismatches when
+        // the strings are visually identical on screen.
         String expected = session.getBleDeviceName();
         String reported = reportedBleDeviceName;
         if (expected == null || expected.trim().isEmpty()) {
-            throw new RuntimeException("Session has no registered BLE device name — re-open the session.");
+            throw new RuntimeException(
+                    "This session has no registered BLE device name — ask your teacher to re-open it.");
         }
         if (reported == null || reported.trim().isEmpty()) {
-            throw new RuntimeException("Connect Bluetooth first — attendance cannot be marked without a paired device.");
+            throw new RuntimeException(
+                    "Pair Bluetooth first — attendance can't be marked without a paired device.");
         }
         if (!normalizeName(expected).equals(normalizeName(reported))) {
-            throw new RuntimeException("BLE device mismatch — you connected to '" + reported.trim()
-                    + "' but this session is bound to '" + expected.trim()
-                    + "'. Pair with the teacher's device.");
+            throw new RuntimeException("Bluetooth device mismatch — you paired with '"
+                    + reported.trim() + "' but this session is bound to '"
+                    + expected.trim() + "'. Pair with the teacher's device and retry.");
         }
 
         // Geolocation gate: student must be within radius of where the teacher
@@ -108,7 +125,7 @@ public class StudentAttendanceService {
             if (studentLat == null || studentLon == null) {
                 throw new RuntimeException("Location is required — allow location access in your browser, then retry.");
             }
-            int radius = session.getAllowedRadiusMeters() == null ? 100 : session.getAllowedRadiusMeters();
+            int radius = session.getAllowedRadiusMeters() == null ? 25 : session.getAllowedRadiusMeters();
             double distance = haversineMeters(
                     session.getLatitude(), session.getLongitude(),
                     studentLat, studentLon);
@@ -126,7 +143,26 @@ public class StudentAttendanceService {
                 .stream()
                 .filter(e -> e.getCourse().getId().equals(fs.getCourse().getId()) && fs.getSection().equals(e.getSection()))
                 .findFirst()
-                .orElseThrow(() -> new AccessDeniedException("You are not enrolled in this section"));
+                .orElseThrow(() -> new AccessDeniedException(
+                        "You aren't enrolled in this section. The teacher may have opened the session for a different class."));
+
+        // Per-session device binding: if the same browser UUID has already
+        // marked attendance for a *different* enrollment in this session,
+        // reject the new mark — catches "log out, log in as friend" cheats.
+        // Skipped if the client didn't send a UUID (unknown browser fallback).
+        if (deviceUuid != null && !deviceUuid.isBlank()) {
+            var collision = attendanceRepository
+                    .findFirstBySessionIdAndDeviceUuidAndEnrollmentIdNot(sessionId, deviceUuid, match.getId());
+            if (collision.isPresent()) {
+                String otherRoll = collision.get().getEnrollment() != null
+                        && collision.get().getEnrollment().getStudent() != null
+                        ? collision.get().getEnrollment().getStudent().getRollNo()
+                        : "another student";
+                throw new RuntimeException(
+                        "This device already marked attendance for " + otherRoll
+                        + " in this session. Each student must mark from their own device.");
+            }
+        }
 
         // Idempotent — if already marked we just return the existing entry's view
         var existing = attendanceRepository.findBySessionIdAndEnrollmentId(sessionId, match.getId());
@@ -139,6 +175,9 @@ public class StudentAttendanceService {
             a.setPresence("P");
             a.setMethod("Bluetooth");
             a.setSessionId(sessionId);
+            a.setDeviceUuid(deviceUuid);
+            a.setClientIp(clientIp);
+            a.setClientFingerprint(clientFingerprint);
             attendanceRepository.save(a);
         }
 
