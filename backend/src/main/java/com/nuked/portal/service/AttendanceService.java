@@ -47,7 +47,12 @@ public class AttendanceService {
             dto.setPresent(present);
             dto.setAbsent(absent);
             dto.setLeaves(leaves);
-            dto.setPercentage(records.isEmpty() ? 0 : Math.round(present * 100.0 / records.size()));
+            // FAST policy: 2 lates = 1 absent. So each Late counts as half-present.
+            // Formula is course-independent — credit-hour weighting cancels out
+            // for percentages (the per-session hours appear in numerator and
+            // denominator equally, only the L coefficient matters).
+            double weightedPresent = present + 0.5 * leaves;
+            dto.setPercentage(records.isEmpty() ? 0 : (int) Math.round(weightedPresent * 100.0 / records.size()));
 
             List<AttendanceDTO.AttendanceRecordDTO> recordDTOs = records.stream().map(r -> {
                 AttendanceDTO.AttendanceRecordDTO recordDTO = new AttendanceDTO.AttendanceRecordDTO();

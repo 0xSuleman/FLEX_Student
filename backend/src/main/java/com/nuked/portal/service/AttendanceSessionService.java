@@ -156,7 +156,7 @@ public class AttendanceSessionService {
             a.setEnrollment(e);
             a.setLectureNo(s.getLectureNo());
             a.setDate(s.getLectureDate());
-            a.setDurationHrs(1.5);
+            a.setDurationHrs(StudentAttendanceService.durationFor(s.getFacultySection().getCourse().getCreditHours()));
             a.setPresence(m.getPresence());
             a.setMethod(m.getMethod() == null ? "Manual" : m.getMethod());
             a.setSessionId(s.getId());
@@ -201,7 +201,7 @@ public class AttendanceSessionService {
             a.setEnrollment(e);
             a.setLectureNo(s.getLectureNo());
             a.setDate(s.getLectureDate());
-            a.setDurationHrs(1.5);
+            a.setDurationHrs(StudentAttendanceService.durationFor(s.getFacultySection().getCourse().getCreditHours()));
             a.setPresence(presence);
             a.setMethod(method);
             a.setSessionId(s.getId());
@@ -270,7 +270,7 @@ public class AttendanceSessionService {
             a.setEnrollment(e);
             a.setLectureNo(s.getLectureNo());
             a.setDate(s.getLectureDate());
-            a.setDurationHrs(1.5);
+            a.setDurationHrs(StudentAttendanceService.durationFor(s.getFacultySection().getCourse().getCreditHours()));
             a.setPresence("A");
             a.setMethod("Auto");
             a.setSessionId(s.getId());

@@ -172,34 +172,62 @@ public class FacultyExtraController {
                 ? java.time.LocalDate.now()
                 : java.time.LocalDate.parse(date);
 
-        // For every student in the section, decide P/A based on whether they
-        // have any P-marked attendance row tied to a session of this section
-        // on the given date.
+        // For every student in the section, decide P / A / L for today, and
+        // also compute cumulative absent + late HOURS across the entire
+        // semester (for the A and L summary columns Sir's sheet has at D, E).
         java.util.List<Enrollment> enrolled = enrollmentRepository.findByCourseIdAndSectionAndSemester(
                 fs.getCourse().getId(), fs.getSection(), fs.getSemester());
+
+        // Lecture duration is course-dependent: 3 CrH → 1.5 hr, 1 or 2 CrH → 3 hr.
+        double sessionDuration = (fs.getCourse().getCreditHours() != null
+                && fs.getCourse().getCreditHours() == 3) ? 1.5 : 3.0;
+
+        // Find today's actual P/A/L per enrollment by walking today's sessions.
         java.util.List<AttendanceSession> sessionsToday = attendanceSessionRepository
                 .findByFacultySectionIdOrderByStartedAtDesc(fs.getId()).stream()
                 .filter(s -> lectureDate.equals(s.getLectureDate()))
                 .toList();
-
-        java.util.Set<Long> presentEnrollmentIds = new java.util.HashSet<>();
+        java.util.Map<Long, String> todayPresenceByEnrollment = new java.util.HashMap<>();
         for (AttendanceSession s : sessionsToday) {
             for (Attendance a : attendanceRepository.findBySessionId(s.getId())) {
-                if ("P".equals(a.getPresence()) && a.getEnrollment() != null) {
-                    presentEnrollmentIds.add(a.getEnrollment().getId());
+                if (a.getEnrollment() == null || a.getPresence() == null) continue;
+                // If a student appears in multiple sessions today, prefer P > L > A.
+                String prev = todayPresenceByEnrollment.get(a.getEnrollment().getId());
+                String next = a.getPresence();
+                if ("P".equals(next) || prev == null
+                        || ("L".equals(next) && "A".equals(prev))) {
+                    todayPresenceByEnrollment.put(a.getEnrollment().getId(), next);
                 }
             }
         }
 
         java.util.Map<String, String> presenceByRoll = new java.util.HashMap<>();
+        java.util.Map<String, Double> absentHoursByRoll = new java.util.HashMap<>();
+        java.util.Map<String, Double> lateHoursByRoll = new java.util.HashMap<>();
         for (Enrollment e : enrolled) {
             if (e.getStudent() == null) continue;
-            presenceByRoll.put(e.getStudent().getRollNo(),
-                    presentEnrollmentIds.contains(e.getId()) ? "P" : "A");
+            String roll = e.getStudent().getRollNo();
+            // Today's mark — default to A if no row exists yet for today.
+            presenceByRoll.put(roll,
+                    todayPresenceByEnrollment.getOrDefault(e.getId(), "A"));
+
+            // Walk all attendance rows for this enrollment to accumulate
+            // absent and late hours (each row stores its own durationHrs).
+            double absHrs = 0.0, lateHrs = 0.0;
+            for (Attendance a : attendanceRepository.findByEnrollmentId(e.getId())) {
+                if (a.getPresence() == null) continue;
+                Double dur = a.getDurationHrs();
+                double hrs = (dur != null) ? dur : sessionDuration;
+                if ("A".equals(a.getPresence())) absHrs += hrs;
+                else if ("L".equals(a.getPresence())) lateHrs += hrs;
+            }
+            absentHoursByRoll.put(roll, absHrs);
+            lateHoursByRoll.put(roll, lateHrs);
         }
 
         byte[] filled = com.nuked.portal.excel.AttendanceTemplateFiller.fill(
-                t.getFileBytes(), lectureDate, presenceByRoll);
+                t.getFileBytes(), lectureDate, presenceByRoll,
+                absentHoursByRoll, lateHoursByRoll);
         String filename = "attendance-" + fs.getCourse().getCode() + "-" + fs.getSection()
                 + "-" + lectureDate.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy")) + ".xlsx";
         return ResponseEntity.ok()

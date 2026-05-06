@@ -13,9 +13,12 @@ import java.util.Map;
 /**
  * Reads a faculty-uploaded attendance template xlsx, finds the next free
  * column starting at F, writes the lecture date in row 1 (DD/MM/YYYY),
- * walks every student row matching column B (roll number) and writes 'P'
- * or 'A' from the supplied map. Returns the modified bytes — the original
- * template stored in the DB is not mutated.
+ * walks every student row matching column B (roll number) and writes
+ * 'P' / 'A' / 'L' from the supplied map. Also updates the running A and L
+ * totals (in HOURS) in columns D and E — Sir's sheet stores those as
+ * weighted hours, e.g. 5 absences in a 3-CrH course = 5 × 1.5 = 7.5 hrs.
+ * Returns the modified bytes — the original template stored in the DB is
+ * not mutated.
  *
  * Layout assumed (per Sir Zeeshan's format):
  *   Row 1 = headers (S#, Roll No., Student Name, A, L, then date columns)
@@ -25,17 +28,23 @@ public class AttendanceTemplateFiller {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    private static final int ROLL_COL = 1;       // column B (zero-indexed)
-    private static final int FIRST_DATE_COL = 5; // column F (zero-indexed)
+    private static final int ROLL_COL = 1;        // column B (zero-indexed)
+    private static final int ABSENT_COL = 3;      // column D — total absent hours
+    private static final int LATE_COL = 4;        // column E — total late hours
+    private static final int FIRST_DATE_COL = 5;  // column F (zero-indexed)
 
     /**
-     * @param templateBytes the original xlsx as stored
-     * @param lectureDate   the date of the session
-     * @param presenceByRoll roll-no → "P" / "A" map
+     * @param templateBytes      the original xlsx as stored
+     * @param lectureDate        the date of the session being recorded
+     * @param presenceByRoll     roll-no → "P" / "A" / "L" for today's column
+     * @param absentHoursByRoll  roll-no → cumulative absent hours across the semester
+     * @param lateHoursByRoll    roll-no → cumulative late hours across the semester
      */
     public static byte[] fill(byte[] templateBytes,
                               LocalDate lectureDate,
-                              Map<String, String> presenceByRoll) throws IOException {
+                              Map<String, String> presenceByRoll,
+                              Map<String, Double> absentHoursByRoll,
+                              Map<String, Double> lateHoursByRoll) throws IOException {
         try (InputStream in = new java.io.ByteArrayInputStream(templateBytes);
              XSSFWorkbook wb = new XSSFWorkbook(in);
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -55,7 +64,9 @@ public class AttendanceTemplateFiller {
             dateHdr.setCellValue(dateLabel);
             try { dateHdr.setCellStyle(headerStyle); } catch (Exception ignored) {}
 
-            // Iterate student rows (2..N) and fill P/A.
+            // Iterate student rows (2..N): write today's P/A/L into the date
+            // column and update the cumulative absent / late hour totals in
+            // columns D and E.
             int last = sheet.getLastRowNum();
             for (int r = 1; r <= last; r++) {
                 Row row = sheet.getRow(r);
@@ -65,10 +76,18 @@ public class AttendanceTemplateFiller {
                 String roll = readString(rollCell);
                 if (roll == null || roll.isBlank()) continue;
                 if (roll.equalsIgnoreCase("Roll No.") || roll.startsWith("Page ")) continue;
-                String mark = presenceByRoll.getOrDefault(roll.trim(), "A");
+                String key = roll.trim();
+                String mark = presenceByRoll.getOrDefault(key, "A");
                 Cell c = row.getCell(dateCol);
                 if (c == null) c = row.createCell(dateCol);
                 c.setCellValue(mark);
+
+                // Cumulative totals — Sir's template stores raw hours, the
+                // 2L=1A weighting is applied as policy outside the sheet.
+                double absentHrs = absentHoursByRoll.getOrDefault(key, 0.0);
+                double lateHrs = lateHoursByRoll.getOrDefault(key, 0.0);
+                writeNumeric(row, ABSENT_COL, absentHrs);
+                writeNumeric(row, LATE_COL, lateHrs);
             }
 
             wb.write(out);
@@ -90,6 +109,14 @@ public class AttendanceTemplateFiller {
         }
         // No matching column — append after the last filled one.
         return Math.max(FIRST_DATE_COL, lastCellNum < 0 ? FIRST_DATE_COL : lastCellNum);
+    }
+
+    private static void writeNumeric(Row row, int col, double value) {
+        Cell c = row.getCell(col);
+        if (c == null) c = row.createCell(col);
+        // Render whole numbers as integers (e.g. "9" not "9.0"), keep .5 fractions.
+        if (value == Math.floor(value)) c.setCellValue((int) value);
+        else c.setCellValue(value);
     }
 
     private static String readString(Cell c) {
