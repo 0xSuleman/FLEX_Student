@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import {
   Home, BookOpen, LogOut, Search, Bell, Zap,
   Target, Award, ClipboardList, FileX, FilePen,
-  Calendar, BarChart3, MessageSquare, GraduationCap, Cpu, Bluetooth,
+  Calendar, BarChart3, MessageSquare, GraduationCap, Cpu,
 } from 'lucide-react'
 
 const NAV = [
@@ -16,7 +16,7 @@ const NAV = [
     { to: '/faculty/timetable',    label: 'Timetable',     icon: Calendar },
   ]},
   { group: 'Attendance', items: [
-    { to: '/faculty/attendance',   label: 'BLE Attendance',icon: Bluetooth },
+    { to: '/faculty/attendance',   label: 'Attendance',    icon: Target },
   ]},
   { group: 'Evaluation', items: [
     { to: '/faculty/marks',        label: 'Marks',         icon: Award },
@@ -36,7 +36,7 @@ const ALL_NAV_ITEMS = NAV.flatMap(g => g.items)
 const NOTIFICATIONS = [
   { id: 1, title: '2 withdrawal requests pending review', time: '5 min ago',  read: false, link: '/faculty/withdrawals' },
   { id: 2, title: 'CS3001 Mid-1 marks pending entry',     time: '1 hour ago', read: false, link: '/faculty/marks' },
-  { id: 3, title: 'BLE attendance window closed',         time: '3 hours ago',read: false, link: '/faculty/attendance' },
+  { id: 3, title: 'Attendance window closed',             time: '3 hours ago',read: false, link: '/faculty/attendance' },
   { id: 4, title: 'HOD returned grade sheet for review',  time: '1 day ago',  read: true,  link: '/faculty/grading' },
   { id: 5, title: 'Feedback window closes in 3 days',     time: '2 days ago', read: true,  link: '/faculty/feedback' },
 ]
