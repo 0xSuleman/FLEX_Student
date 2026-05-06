@@ -17,11 +17,14 @@ const MANUAL = 'manual' // Faculty-only marking — opens a session, hides the P
 const STATUS_TONE = {
   Present: 'bg-moss text-cream',
   Absent:  'bg-bad text-bone',
-  Leave:   'bg-mustard text-ink',
+  Late:    'bg-mustard text-ink',
   Pending: 'bg-bone text-cocoa',
+  // legacy alias — old code referenced "Leave"
+  Leave:   'bg-mustard text-ink',
 }
 
-const PRESENCE_CODE = { Present: 'P', Absent: 'A', Leave: 'L', Pending: '' }
+const PRESENCE_CODE = { Present: 'P', Absent: 'A', Late: 'L', Leave: 'L', Pending: '' }
+const DECODE_PRESENCE = { P: 'Present', A: 'Absent', L: 'Late' }
 
 export default function FacultyAttendance() {
   const [courses, setCourses] = useState([])
@@ -238,6 +241,23 @@ export default function FacultyAttendance() {
     return m
   }, [roster])
 
+  // Same flags computed for the past-session edit roster so the Device column
+  // there can highlight collisions exactly the same way as the live view.
+  const editDeviceCounts = useMemo(() => {
+    const m = {}
+    for (const r of editRoster) {
+      if (r.deviceUuid) m[r.deviceUuid] = (m[r.deviceUuid] || 0) + 1
+    }
+    return m
+  }, [editRoster])
+  const editFingerprintCounts = useMemo(() => {
+    const m = {}
+    for (const r of editRoster) {
+      if (r.clientFingerprint) m[r.clientFingerprint] = (m[r.clientFingerprint] || 0) + 1
+    }
+    return m
+  }, [editRoster])
+
   // ── Mode initiations ──
   const startEdit = async () => {
     setMode(EDIT); setBleSession(null)
@@ -263,18 +283,20 @@ export default function FacultyAttendance() {
     if (!courseId) return
     setMode(MANUAL)
     setBleSession(null)
+    // Default everyone to Present in Manual; faculty just unchecks absentees.
+    loadRoster('Present', 'Manual')
   }
 
-  // Click-to-cycle: only used in MANUAL mode (and live PIN sessions where
-  // faculty wants to override). Walks Pending → Present → Absent → Leave →
-  // back to Pending.
-  const cycleRowStatus = (enrollmentId) => {
-    const order = ['Pending', 'Present', 'Absent', 'Leave']
+  // Toggle a status on a roster row. If the same status is already active
+  // → un-mark (back to Pending). Otherwise, set the new status. Used by the
+  // P/A/L buttons in MANUAL mode.
+  const setRowStatus = (enrollmentId, status) => {
     setRoster(prev => prev.map(r => {
       if (r.enrollmentId !== enrollmentId) return r
-      const idx = order.indexOf(r.status)
-      const next = order[(idx + 1) % order.length]
-      return { ...r, status: next, method: next === 'Pending' ? '—' : 'Manual', dirty: true }
+      if (r.status === status) {
+        return { ...r, status: 'Pending', method: '—', dirty: true }
+      }
+      return { ...r, status, method: 'Manual', dirty: true }
     }))
   }
 
@@ -319,8 +341,9 @@ export default function FacultyAttendance() {
         endsAt: new Date(s.endsAt).getTime(),
       })
       setNow(new Date(s.startedAt).getTime())
-      await loadRoster('Pending', '—')
-      setToast({ kind: 'info', text: `Session live · PIN ${s.pinCode}. Announce this code to the class.` })
+      // Manual mode wants every student pre-marked Present; PIN mode starts blank.
+      await loadRoster(mode === MANUAL ? 'Present' : 'Pending', mode === MANUAL ? 'Manual' : '—')
+      setToast({ kind: 'info', text: mode === MANUAL ? 'Manual session open — tap rows to set P / A / L.' : `Session live · PIN ${s.pinCode}. Announce this code to the class.` })
       clearToastSoon()
     } catch (err) {
       setToast({ kind: 'err', text: 'Failed to open session: ' + (err.response?.data?.message || err.message) })
@@ -354,12 +377,15 @@ export default function FacultyAttendance() {
         enrollmentId: r.enrollmentId,
         roll: r.rollNo,
         name: r.name,
-        // Convert backend P/A/L code → UI status
+        // Convert backend P/A/L code → UI status. L renders as "Late".
         status: r.presence === 'P' ? 'Present'
               : r.presence === 'A' ? 'Absent'
-              : r.presence === 'L' ? 'Leave'
+              : r.presence === 'L' ? 'Late'
               : 'Pending',
         method: r.method || '—',
+        deviceUuid: r.deviceUuid,
+        clientIp: r.clientIp,
+        clientFingerprint: r.clientFingerprint,
         dirty: false,
       })))
     } catch (err) {
@@ -578,16 +604,18 @@ export default function FacultyAttendance() {
 
         {(mode === BLE || mode === MANUAL) && !bleSession && (
           <div className="p-5 grid grid-cols-1 md:grid-cols-12 gap-4">
-            <Field className="md:col-span-8" label="Lecture Topic">
+            <Field className={mode === MANUAL ? 'md:col-span-12' : 'md:col-span-8'} label="Lecture Topic">
               <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Iterative & Incremental Models"
                 className="w-full bg-bone border-2 border-ink rounded-md px-3 py-2 font-mono text-sm text-ink focus:outline-none" />
             </Field>
-            <Field className="md:col-span-4" label={`Duration · ${duration >= 60 ? `${(duration / 60).toFixed(duration % 60 ? 1 : 0)} hr` : `${duration} min`}`}>
-              <input type="range" min="5" max="180" step="5" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full accent-ink" />
-            </Field>
+            {mode === BLE && (
+              <Field className="md:col-span-4" label={`Duration · ${duration >= 60 ? `${(duration / 60).toFixed(duration % 60 ? 1 : 0)} hr` : `${duration} min`}`}>
+                <input type="range" min="5" max="180" step="5" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full accent-ink" />
+              </Field>
+            )}
             <div className="md:col-span-12 text-[11px] font-bold text-cocoa">
               {mode === MANUAL
-                ? 'Manual mode — after you click Open, tap each student row in the roster to cycle Pending → Present → Absent → Leave. Close & Save to commit; unmarked students become Absent automatically.'
+                ? 'Manual mode — every student starts as Present. Click P / A / L on any row to change. Click an already-active button to un-mark it. Close & Save to commit.'
                 : 'A 6-digit PIN is generated when you click Open. Announce or project it; students enter the PIN + their location is checked against the classroom.'}
             </div>
             <div className="md:col-span-12 flex justify-end gap-2">
@@ -696,6 +724,7 @@ export default function FacultyAttendance() {
               <tr className="bg-bone border-b-2 border-ink text-coffee">
                 <Th>#</Th><Th>Roll</Th><Th>Name</Th>
                 <Th center>Status</Th>
+                {mode === MANUAL && <Th center>Mark</Th>}
                 <Th center>Method</Th>
                 <Th center>Device</Th>
               </tr>
@@ -706,37 +735,36 @@ export default function FacultyAttendance() {
                 const dupFingerprint = !dupDevice && r.clientFingerprint && fingerprintCounts[r.clientFingerprint] > 1
                 const rowBg = dupDevice ? 'bg-bad/10' : dupFingerprint ? 'bg-mustard/15' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
                 return (
-                <tr key={r.enrollmentId || r.roll}
-                  onClick={mode === MANUAL ? () => cycleRowStatus(r.enrollmentId) : undefined}
-                  className={`border-b border-dashed border-cocoa/30 ${rowBg} ${mode === MANUAL ? 'cursor-pointer hover:bg-tan/40' : ''}`}>
+                <tr key={r.enrollmentId || r.roll} className={`border-b border-dashed border-cocoa/30 ${rowBg}`}>
                   <td className="px-4 py-2.5 text-cocoa font-bold text-xs">{i + 1}</td>
                   <td className="px-4 py-2.5 font-extrabold text-ink">{r.roll}</td>
                   <td className="px-4 py-2.5 text-ink">{r.name}</td>
                   <td className="px-4 py-2.5 text-center">
                     {r.status === 'Pending'
                       ? <span className="inline-block w-6 h-5 border-2 border-dashed border-cocoa/50 rounded" title="unmarked" />
-                      : <span className={`tag ${STATUS_TONE[r.status]}`}>{r.status}</span>}
+                      : <span className={`tag ${STATUS_TONE[r.status]}`}>{r.status === 'Leave' ? 'Late' : r.status}</span>}
                   </td>
+                  {mode === MANUAL && (
+                    <td className="px-4 py-2.5 text-center">
+                      <div className="inline-flex gap-1">
+                        <Btn label="P" active={r.status === 'Present'} tone="moss"    onClick={() => setRowStatus(r.enrollmentId, 'Present')} />
+                        <Btn label="A" active={r.status === 'Absent'}  tone="bad"     onClick={() => setRowStatus(r.enrollmentId, 'Absent')} />
+                        <Btn label="L" active={r.status === 'Late' || r.status === 'Leave'} tone="mustard" onClick={() => setRowStatus(r.enrollmentId, 'Late')} />
+                      </div>
+                    </td>
+                  )}
                   <td className="px-4 py-2.5 text-center">
                     <span className={`tag ${r.method === 'PIN' || r.method === 'Bluetooth' ? 'bg-coffee text-bone' : r.method === 'Manual' ? 'bg-mustard text-ink' : r.method === 'Auto' ? 'bg-cocoa text-bone' : 'bg-bone text-cocoa'}`}>{r.method}</span>
                   </td>
                   <td className="px-4 py-2.5 text-center">
-                    {r.deviceUuid
-                      ? <span className={`tag font-mono ${dupDevice ? 'bg-bad text-bone animate-blink' : dupFingerprint ? 'bg-mustard text-ink' : 'bg-bone text-cocoa'}`} title={
-                          dupDevice
-                            ? `Same browser device used by ${deviceCounts[r.deviceUuid]} students — log-out + log-in cheat`
-                            : dupFingerprint
-                              ? `Same phone signature as ${fingerprintCounts[r.clientFingerprint]} students — could be same phone via different browsers, or identical phone models. Verify with the student.`
-                              : `Device ${r.deviceUuid}${r.clientIp ? ` · IP ${r.clientIp}` : ''}${r.clientFingerprint ? ` · ${r.clientFingerprint}` : ''}`
-                        }>
-                          {dupDevice ? '⚠ ' : dupFingerprint ? '⚑ ' : ''}…{r.deviceUuid.slice(-4)}
-                        </span>
-                      : <span className="text-cocoa/40 text-xs">—</span>}
+                    <DeviceCell r={r} dupDevice={dupDevice} dupFingerprint={dupFingerprint}
+                      deviceCount={deviceCounts[r.deviceUuid]}
+                      fingerprintCount={fingerprintCounts[r.clientFingerprint]} />
                   </td>
                 </tr>
               )})}
               {filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-cocoa font-bold text-xs uppercase tracking-wider">No students.</td></tr>
+                <tr><td colSpan={mode === MANUAL ? 7 : 6} className="px-5 py-8 text-center text-cocoa font-bold text-xs uppercase tracking-wider">No students.</td></tr>
               )}
             </tbody>
           </table>
@@ -815,36 +843,46 @@ export default function FacultyAttendance() {
                                 <thead>
                                   <tr className="bg-cream border-b-2 border-ink text-coffee">
                                     <Th>#</Th><Th>Roll</Th><Th>Name</Th><Th center>Current</Th><Th center>Method</Th>
+                                    <Th center>Device</Th>
                                     {mode === EDIT && <Th center>Mark</Th>}
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {editRoster.map((r, j) => (
-                                    <tr key={r.enrollmentId} className={`border-b border-dashed border-cocoa/30 ${j % 2 === 0 ? 'bg-cream' : 'bg-bone/50'} ${r.dirty ? 'ring-1 ring-burn/40' : ''}`}>
+                                  {editRoster.map((r, j) => {
+                                    const dupDeviceE = r.deviceUuid && editDeviceCounts[r.deviceUuid] > 1
+                                    const dupFingerprintE = !dupDeviceE && r.clientFingerprint && editFingerprintCounts[r.clientFingerprint] > 1
+                                    const rowBgE = dupDeviceE ? 'bg-bad/10' : dupFingerprintE ? 'bg-mustard/15' : j % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
+                                    return (
+                                    <tr key={r.enrollmentId} className={`border-b border-dashed border-cocoa/30 ${rowBgE} ${r.dirty ? 'ring-1 ring-burn/40' : ''}`}>
                                       <td className="px-4 py-2 text-left text-cocoa font-bold text-xs">{j + 1}</td>
                                       <td className="px-4 py-2 text-left font-extrabold text-ink">{r.roll}</td>
                                       <td className="px-4 py-2 text-left text-ink">{r.name}</td>
                                       <td className="px-4 py-2 text-center">
                                         {r.status === 'Pending'
                                           ? <span className="inline-block w-6 h-5 border-2 border-dashed border-cocoa/50 rounded" title="unmarked" />
-                                          : <span className={`tag ${STATUS_TONE[r.status]}`}>{r.status}</span>}
+                                          : <span className={`tag ${STATUS_TONE[r.status]}`}>{r.status === 'Leave' ? 'Late' : r.status}</span>}
                                       </td>
                                       <td className="px-4 py-2 text-center">
                                         <span className={`tag ${r.method === 'PIN' || r.method === 'Bluetooth' ? 'bg-coffee text-bone' : r.method === 'Manual' ? 'bg-mustard text-ink' : r.method === 'Auto' ? 'bg-cocoa text-bone' : 'bg-bone text-cocoa'}`}>{r.method}</span>
+                                      </td>
+                                      <td className="px-4 py-2 text-center">
+                                        <DeviceCell r={r} dupDevice={dupDeviceE} dupFingerprint={dupFingerprintE}
+                                          deviceCount={editDeviceCounts[r.deviceUuid]}
+                                          fingerprintCount={editFingerprintCounts[r.clientFingerprint]} />
                                       </td>
                                       {mode === EDIT && (
                                         <td className="px-4 py-2 text-center">
                                           <div className="inline-flex gap-1">
                                             <Btn label="P" active={r.status === 'Present'} tone="moss"    onClick={() => setEditStatus(r.roll, 'Present')} />
                                             <Btn label="A" active={r.status === 'Absent'}  tone="bad"     onClick={() => setEditStatus(r.roll, 'Absent')} />
-                                            <Btn label="L" active={r.status === 'Leave'}   tone="mustard" onClick={() => setEditStatus(r.roll, 'Leave')} />
+                                            <Btn label="L" active={r.status === 'Late' || r.status === 'Leave'} tone="mustard" onClick={() => setEditStatus(r.roll, 'Late')} />
                                           </div>
                                         </td>
                                       )}
                                     </tr>
-                                  ))}
+                                  )})}
                                   {editRoster.length === 0 && (
-                                    <tr><td colSpan={mode === EDIT ? 6 : 5} className="px-4 py-6 text-center text-cocoa text-xs font-bold uppercase tracking-wider">No students.</td></tr>
+                                    <tr><td colSpan={mode === EDIT ? 7 : 6} className="px-4 py-6 text-center text-cocoa text-xs font-bold uppercase tracking-wider">No students.</td></tr>
                                   )}
                                 </tbody>
                               </table>
@@ -910,6 +948,42 @@ function Field({ label, children, className = '' }) {
 
 function Th({ children, center }) {
   return <th className={`px-4 py-2.5 text-[10px] font-extrabold uppercase tracking-widest ${center ? 'text-center' : 'text-left'}`}>{children}</th>
+}
+
+/**
+ * Speech-bubble-style "SAME DEVICE" notice with a yellow chat-tail.
+ * Renders nothing when the row's device is unique. For duplicate-UUID
+ * collisions (same browser, hard cheat) the bubble is red+blinking; for
+ * fingerprint collisions (same phone, different browsers OR identical
+ * phone models) it's mustard yellow — a review flag, not a verdict.
+ */
+function DeviceCell({ r, dupDevice, dupFingerprint, deviceCount, fingerprintCount }) {
+  if (!r.deviceUuid && !r.clientFingerprint) {
+    return <span className="text-cocoa/40 text-xs">—</span>
+  }
+  if (dupDevice || dupFingerprint) {
+    const isHard = dupDevice
+    const tone = isHard ? 'bg-bad text-bone' : 'bg-mustard text-ink'
+    const tailColor = isHard ? 'bg-bad' : 'bg-mustard'
+    const tip = isHard
+      ? `Same browser device used by ${deviceCount} students — same-browser log-out cheat`
+      : `Same phone signature as ${fingerprintCount} students — could be same phone via different browsers, or identical phone models. Verify with the student.`
+    return (
+      <div className="relative inline-block" title={tip}>
+        <span className={`relative ${tone} border-2 border-ink rounded-md px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider whitespace-nowrap shadow-pixel-sm ${isHard ? 'animate-blink' : ''}`}>
+          {isHard ? '⚠ same device' : '⚑ same device'}
+        </span>
+        {/* Chat-bubble tail: a small rotated square positioned at the bottom-left, with the bubble color + ink border (only the visible two sides). */}
+        <span className={`absolute left-3 -bottom-[5px] w-2.5 h-2.5 ${tailColor} border-r-2 border-b-2 border-ink rotate-45`} aria-hidden="true" />
+      </div>
+    )
+  }
+  return (
+    <span className="text-cocoa/40 text-[10px] font-mono"
+      title={`Device ${r.deviceUuid || '?'}${r.clientIp ? ` · IP ${r.clientIp}` : ''}${r.clientFingerprint ? ` · ${r.clientFingerprint}` : ''}`}>
+      ✓
+    </span>
+  )
 }
 
 function Btn({ label, onClick, active, tone }) {
