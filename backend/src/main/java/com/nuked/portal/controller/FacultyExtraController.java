@@ -158,23 +158,54 @@ public class FacultyExtraController {
                 .orElse(ResponseEntity.ok(Map.of("uploaded", false)));
     }
 
-    /** Download the template with today's column appended (P/A per student). */
+    /**
+     * Download the template with one column per session.
+     * scope = today (default): every session whose lectureDate == today
+     * scope = latest: just the most recent session
+     * scope = all:    every session ever held in this section
+     * Multiple sessions on the same date get '#2', '#3' etc suffixed to the
+     * column header so they don't clobber each other (makeup classes).
+     */
     @GetMapping("/sections/{sectionId}/attendance/sheet")
     public ResponseEntity<byte[]> downloadFilledSheet(Authentication auth,
                                                       @PathVariable Long sectionId,
-                                                      @RequestParam(required = false) String date) throws IOException {
+                                                      @RequestParam(required = false) String scope) throws IOException {
         FacultySection fs = facultyService.ownedSection(auth.getName(), sectionId);
         AttendanceTemplate t = attendanceTemplateRepository.findByFacultySectionId(fs.getId())
                 .orElseThrow(() -> new IllegalStateException(
                         "No template uploaded for this section yet. Click 'Upload Template' first."));
 
-        java.time.LocalDate lectureDate = (date == null || date.isBlank())
-                ? java.time.LocalDate.now()
-                : java.time.LocalDate.parse(date);
+        String mode = (scope == null || scope.isBlank()) ? "today" : scope.trim().toLowerCase();
+        java.time.LocalDate today = java.time.LocalDate.now();
 
-        // For every student in the section, decide P / A / L for today, and
-        // also compute cumulative absent + late HOURS across the entire
-        // semester (for the A and L summary columns Sir's sheet has at D, E).
+        // Pull every session for this section, oldest first so column order
+        // in the Excel file matches lecture chronology.
+        java.util.List<AttendanceSession> all = attendanceSessionRepository
+                .findByFacultySectionIdOrderByStartedAtDesc(fs.getId()).stream()
+                .sorted(Comparator.comparing(AttendanceSession::getStartedAt))
+                .toList();
+
+        // Filter according to scope.
+        java.util.List<AttendanceSession> picked;
+        switch (mode) {
+            case "latest":
+                picked = all.isEmpty() ? java.util.List.of()
+                        : java.util.List.of(all.get(all.size() - 1));
+                break;
+            case "all":
+                picked = all;
+                break;
+            case "today":
+            default:
+                picked = all.stream().filter(s -> today.equals(s.getLectureDate())).toList();
+                break;
+        }
+        if (picked.isEmpty()) {
+            throw new IllegalStateException(
+                    "No sessions to export for scope '" + mode + "'. "
+                    + (mode.equals("today") ? "No lectures held today yet." : "No sessions in this section."));
+        }
+
         java.util.List<Enrollment> enrolled = enrollmentRepository.findByCourseIdAndSectionAndSemester(
                 fs.getCourse().getId(), fs.getSection(), fs.getSemester());
 
@@ -182,37 +213,40 @@ public class FacultyExtraController {
         double sessionDuration = (fs.getCourse().getCreditHours() != null
                 && fs.getCourse().getCreditHours() == 3) ? 1.5 : 3.0;
 
-        // Find today's actual P/A/L per enrollment by walking today's sessions.
-        java.util.List<AttendanceSession> sessionsToday = attendanceSessionRepository
-                .findByFacultySectionIdOrderByStartedAtDesc(fs.getId()).stream()
-                .filter(s -> lectureDate.equals(s.getLectureDate()))
-                .toList();
-        java.util.Map<Long, String> todayPresenceByEnrollment = new java.util.HashMap<>();
-        for (AttendanceSession s : sessionsToday) {
-            for (Attendance a : attendanceRepository.findBySessionId(s.getId())) {
-                if (a.getEnrollment() == null || a.getPresence() == null) continue;
-                // If a student appears in multiple sessions today, prefer P > L > A.
-                String prev = todayPresenceByEnrollment.get(a.getEnrollment().getId());
-                String next = a.getPresence();
-                if ("P".equals(next) || prev == null
-                        || ("L".equals(next) && "A".equals(prev))) {
-                    todayPresenceByEnrollment.put(a.getEnrollment().getId(), next);
-                }
+        // Build one SessionFill per picked session. Disambiguate column labels
+        // for multiple sessions on the same date: first → "07/05/2026",
+        // second → "07/05/2026 #2", third → "07/05/2026 #3", etc.
+        java.time.format.DateTimeFormatter dateFmt =
+                java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        java.util.Map<String, Integer> labelCounts = new java.util.HashMap<>();
+        java.util.List<com.nuked.portal.excel.AttendanceTemplateFiller.SessionFill> fills =
+                new java.util.ArrayList<>();
+        for (AttendanceSession s : picked) {
+            String dateStr = s.getLectureDate() != null ? s.getLectureDate().format(dateFmt) : "—";
+            int n = labelCounts.merge(dateStr, 1, Integer::sum);
+            String label = (n == 1) ? dateStr : dateStr + " #" + n;
+
+            // Per-roll presence for this session: walk its attendance rows.
+            java.util.Map<String, String> presence = new java.util.HashMap<>();
+            for (Enrollment e : enrolled) {
+                if (e.getStudent() == null) continue;
+                presence.put(e.getStudent().getRollNo(), "A"); // default
             }
+            for (Attendance a : attendanceRepository.findBySessionId(s.getId())) {
+                if (a.getEnrollment() == null || a.getEnrollment().getStudent() == null) continue;
+                String roll = a.getEnrollment().getStudent().getRollNo();
+                String mark = a.getPresence();
+                if (mark != null) presence.put(roll, mark);
+            }
+            fills.add(new com.nuked.portal.excel.AttendanceTemplateFiller.SessionFill(label, presence));
         }
 
-        java.util.Map<String, String> presenceByRoll = new java.util.HashMap<>();
+        // Cumulative A/L hours across the entire semester (independent of scope).
         java.util.Map<String, Double> absentHoursByRoll = new java.util.HashMap<>();
         java.util.Map<String, Double> lateHoursByRoll = new java.util.HashMap<>();
         for (Enrollment e : enrolled) {
             if (e.getStudent() == null) continue;
             String roll = e.getStudent().getRollNo();
-            // Today's mark — default to A if no row exists yet for today.
-            presenceByRoll.put(roll,
-                    todayPresenceByEnrollment.getOrDefault(e.getId(), "A"));
-
-            // Walk all attendance rows for this enrollment to accumulate
-            // absent and late hours (each row stores its own durationHrs).
             double absHrs = 0.0, lateHrs = 0.0;
             for (Attendance a : attendanceRepository.findByEnrollmentId(e.getId())) {
                 if (a.getPresence() == null) continue;
@@ -226,10 +260,14 @@ public class FacultyExtraController {
         }
 
         byte[] filled = com.nuked.portal.excel.AttendanceTemplateFiller.fill(
-                t.getFileBytes(), lectureDate, presenceByRoll,
-                absentHoursByRoll, lateHoursByRoll);
+                t.getFileBytes(), fills, absentHoursByRoll, lateHoursByRoll);
+        String suffix = switch (mode) {
+            case "latest" -> "latest";
+            case "all" -> "all-sessions";
+            default -> today.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+        };
         String filename = "attendance-" + fs.getCourse().getCode() + "-" + fs.getSection()
-                + "-" + lectureDate.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy")) + ".xlsx";
+                + "-" + suffix + ".xlsx";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
