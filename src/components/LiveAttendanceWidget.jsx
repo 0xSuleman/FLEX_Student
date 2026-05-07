@@ -287,7 +287,9 @@ export default function LiveAttendanceWidget() {
           </div>
           <div className="text-[11px] text-cocoa font-bold mt-0.5 break-words">
             {!bleSupported
-              ? 'Bluetooth not available in this browser. Use Chrome or Edge.'
+              ? (sessions.length === 0
+                  ? 'iPhone detected — when your teacher opens a session, tap "Pair Device" to connect.'
+                  : 'iPhone detected — tap "Pair Device" to connect (no Bluetooth scan needed).')
               : !bleAdapterOn
                 ? 'Turn on Bluetooth on this device first. The pair button will appear once Bluetooth is on.'
                 : !bleConnected
@@ -302,23 +304,23 @@ export default function LiveAttendanceWidget() {
           </div>
         </div>
         <div className="w-full sm:w-auto shrink-0 flex items-center gap-2 flex-wrap justify-end">
-          <span className={`tag ${showMismatchWarning ? 'bg-bad text-bone' : bleConnected ? 'bg-moss text-cream' : !bleAdapterOn ? 'bg-bad text-bone' : 'bg-mustard text-ink'}`}>
-            {bleConnected ? (showMismatchWarning ? 'WRONG DEVICE' : 'CONNECTED') : !bleAdapterOn ? 'BLUETOOTH OFF' : 'NOT PAIRED'}
+          <span className={`tag ${showMismatchWarning ? 'bg-bad text-bone' : bleConnected ? 'bg-moss text-cream' : (!bleSupported || !bleAdapterOn) ? 'bg-mustard text-ink' : 'bg-mustard text-ink'}`}>
+            {bleConnected ? (showMismatchWarning ? 'WRONG DEVICE' : 'CONNECTED') : !bleSupported ? 'IPHONE FALLBACK' : !bleAdapterOn ? 'BLUETOOTH OFF' : 'NOT PAIRED'}
           </span>
           {bleConnected ? (
             <button onClick={disconnectBluetooth}
               className="bg-bone text-ink border-2 border-ink rounded-md px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">
               Disconnect
             </button>
-          ) : (bleAdapterOn && sessions.length > 0) ? (
+          ) : ((bleAdapterOn || !bleSupported) && sessions.length > 0) ? (
             bleConnecting ? (
               <button onClick={() => { setBleConnecting(false); setBleError('Pairing cancelled.') }}
                 className="bg-bone text-ink border-2 border-ink rounded-md px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1.5">
                 <Bluetooth size={11} strokeWidth={3} className="animate-pulse" /> Cancel
               </button>
             ) : (
-              <button onClick={connectBluetooth} disabled={!bleSupported}
-                className="bg-burn text-bone border-2 border-ink rounded-md px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-50 inline-flex items-center gap-1.5">
+              <button onClick={connectBluetooth}
+                className="bg-burn text-bone border-2 border-ink rounded-md px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1.5">
                 <Bluetooth size={11} strokeWidth={3} /> Pair Device
               </button>
             )
