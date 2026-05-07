@@ -54,7 +54,9 @@ export default function FacultyAttendance() {
   const [templateUploading, setTemplateUploading] = useState(false)
   const templateInputRef = useRef(null)
   const exportMenuRef = useRef(null)
+  const exportButtonRef = useRef(null)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const [exportMenuPos, setExportMenuPos] = useState(null)
   const tickRef = useRef(null)
   const pollRef = useRef(null)
 
@@ -104,15 +106,39 @@ export default function FacultyAttendance() {
   }
   useEffect(() => { loadTemplateStatus() }, [courseId])
 
-  // Close the Export Excel dropdown when clicking outside it.
+  // Reposition the dropdown anchored to the trigger button. Uses fixed
+  // positioning so it escapes any overflow-hidden parent (SectionCard etc).
+  // Mobile (<640px) full-width with 12px gutters; desktop right-aligned to
+  // the button.
+  const recomputeExportMenuPos = () => {
+    if (!exportButtonRef.current) return
+    const rect = exportButtonRef.current.getBoundingClientRect()
+    const isMobile = window.innerWidth < 640
+    if (isMobile) {
+      setExportMenuPos({ top: rect.bottom + 6, left: 12, right: 12, width: null })
+    } else {
+      setExportMenuPos({ top: rect.bottom + 6, left: null, right: window.innerWidth - rect.right, width: 288 })
+    }
+  }
+
   useEffect(() => {
-    const handler = (e) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) {
+    if (!exportMenuOpen) return
+    recomputeExportMenuPos()
+    const handlerClick = (e) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)
+          && exportButtonRef.current && !exportButtonRef.current.contains(e.target)) {
         setExportMenuOpen(false)
       }
     }
-    if (exportMenuOpen) document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    const handleResize = () => recomputeExportMenuPos()
+    document.addEventListener('mousedown', handlerClick)
+    window.addEventListener('resize', handleResize)
+    window.addEventListener('scroll', handleResize, true)
+    return () => {
+      document.removeEventListener('mousedown', handlerClick)
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('scroll', handleResize, true)
+    }
   }, [exportMenuOpen])
 
   // On mount / section change: if there's still an OPEN session for this
@@ -665,35 +691,41 @@ export default function FacultyAttendance() {
               className="bg-mustard text-ink border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
               <Upload size={11} strokeWidth={3} /> {templateUploading ? 'Uploading…' : (templateStatus?.uploaded ? 'Insert Excel Sheet' : 'Insert Excel Sheet')}
             </button>
-            <div className="relative" ref={exportMenuRef}>
-              <button onClick={() => setExportMenuOpen(v => !v)} disabled={!courseId || !templateStatus?.uploaded}
-                title="Download the uploaded template with attendance columns appended. Choose Today, Latest, or Overview."
-                className="bg-burn text-bone border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1.5 disabled:opacity-50">
-                <Download size={11} strokeWidth={3} /> Export Excel
-                <ChevronDown size={10} strokeWidth={3} className={`transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {exportMenuOpen && (
-                <div className="absolute right-0 mt-1.5 w-72 bg-cream border-2 border-ink rounded-md shadow-pixel z-30 overflow-hidden">
-                  <div className="bg-cocoa text-bone px-3 py-2 border-b-2 border-ink">
-                    <div className="font-display text-[10px] uppercase tracking-widest">Download Sheet</div>
-                    <div className="text-[9px] text-tan font-bold mt-0.5 normal-case tracking-normal">Pick a scope · template-format xlsx</div>
-                  </div>
-                  <ExportItem
-                    Icon={Calendar} title="Today" sub="Every session held today (one column per class — handles makeup classes)"
-                    onClick={() => { setExportMenuOpen(false); downloadSheet('today') }}
-                  />
-                  <ExportItem
-                    Icon={Clock} title="Latest Session" sub="Just the most recent lecture's attendance"
-                    onClick={() => { setExportMenuOpen(false); downloadSheet('latest') }}
-                  />
-                  <ExportItem
-                    Icon={BookMarked} title="Overview" sub="Full semester · every session as its own column"
-                    onClick={() => { setExportMenuOpen(false); downloadSheet('all') }}
-                    last
-                  />
+            <button ref={exportButtonRef} onClick={() => setExportMenuOpen(v => !v)} disabled={!courseId || !templateStatus?.uploaded}
+              title="Download the uploaded template with attendance columns appended. Choose Today, Latest, or Overview."
+              className="bg-burn text-bone border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1.5 disabled:opacity-50">
+              <Download size={11} strokeWidth={3} /> Export Excel
+              <ChevronDown size={10} strokeWidth={3} className={`transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {exportMenuOpen && exportMenuPos && (
+              <div ref={exportMenuRef}
+                style={{
+                  position: 'fixed',
+                  top: exportMenuPos.top,
+                  left: exportMenuPos.left ?? 'auto',
+                  right: exportMenuPos.right ?? 'auto',
+                  width: exportMenuPos.width ?? 'auto',
+                }}
+                className="bg-cream border-2 border-ink rounded-md shadow-pixel z-50 overflow-hidden">
+                <div className="bg-cocoa text-bone px-3 py-2 border-b-2 border-ink">
+                  <div className="font-display text-[10px] uppercase tracking-widest">Download Sheet</div>
+                  <div className="text-[9px] text-tan font-bold mt-0.5 normal-case tracking-normal">Pick a scope · template-format xlsx</div>
                 </div>
-              )}
-            </div>
+                <ExportItem
+                  Icon={Calendar} title="Today" sub="Every session held today (one column per class — handles makeup classes)"
+                  onClick={() => { setExportMenuOpen(false); downloadSheet('today') }}
+                />
+                <ExportItem
+                  Icon={Clock} title="Latest Session" sub="Just the most recent lecture's attendance"
+                  onClick={() => { setExportMenuOpen(false); downloadSheet('latest') }}
+                />
+                <ExportItem
+                  Icon={BookMarked} title="Overview" sub="Full semester · every session as its own column"
+                  onClick={() => { setExportMenuOpen(false); downloadSheet('all') }}
+                  last
+                />
+              </div>
+            )}
             <ModeBadge mode={mode} bleSupported={bleSupported} />
           </div>
         </div>
