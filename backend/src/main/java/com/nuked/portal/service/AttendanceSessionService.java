@@ -81,7 +81,7 @@ public class AttendanceSessionService {
         s.setBleDeviceName(bleName);
         s.setLatitude(req.getLatitude());
         s.setLongitude(req.getLongitude());
-        s.setAllowedRadiusMeters(2000);
+        s.setAllowedRadiusMeters(10000);
         sessionRepository.save(s);
 
         return toDto(s);

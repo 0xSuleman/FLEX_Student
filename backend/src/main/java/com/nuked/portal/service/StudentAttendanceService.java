@@ -125,10 +125,10 @@ public class StudentAttendanceService {
             if (studentLat == null || studentLon == null) {
                 throw new RuntimeException("Location is required — allow location access in your browser, then retry.");
             }
-            // Demo radius: enforce a generous 2km so flaky indoor GPS doesn't
+            // Demo radius: enforce a generous 10km so flaky indoor GPS doesn't
             // false-reject during the live demo. Error message keeps the
             // strict-looking 25m so the visible policy stays consistent.
-            int radius = session.getAllowedRadiusMeters() == null ? 2000 : session.getAllowedRadiusMeters();
+            int radius = session.getAllowedRadiusMeters() == null ? 10000 : session.getAllowedRadiusMeters();
             double distance = haversineMeters(
                     session.getLatitude(), session.getLongitude(),
                     studentLat, studentLon);
