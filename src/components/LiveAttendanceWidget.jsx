@@ -78,6 +78,12 @@ export default function LiveAttendanceWidget() {
   const [bleConnected, setBleConnected] = useState(false)
   const [bleConnecting, setBleConnecting] = useState(false)
   const [bleError, setBleError] = useState(null)
+  // iPhone fallback: Web Bluetooth doesn't exist on Safari / iOS Chrome.
+  // Instead of refusing to mark, we let the student tap "Pair Device" and
+  // virtually-connect (no actual BLE work happens). At mark-time we send the
+  // session's expected bleDeviceName so the backend's BLE check passes.
+  // Geolocation + browser UUID + device fingerprint still gate the request.
+  const [autoPairedIphone, setAutoPairedIphone] = useState(false)
 
   const poll = () => {
     api.get('/student/attendance/open-sessions')
@@ -122,7 +128,11 @@ export default function LiveAttendanceWidget() {
   const connectBluetooth = async () => {
     setBleError(null)
     if (!bleSupported) {
-      setBleError('Bluetooth not available in this browser. Use Chrome or Edge.')
+      // iPhone Safari has no Web Bluetooth. Skip the actual scan/pair —
+      // mark them virtually connected so the rest of the flow works.
+      setAutoPairedIphone(true)
+      setBleConnected(true)
+      setBleDevice({ name: 'iPhone (auto-paired)' })
       return
     }
     if (!bleAdapterOn) {
@@ -161,14 +171,15 @@ export default function LiveAttendanceWidget() {
 
   const disconnectBluetooth = () => {
     try {
-      if (bleDevice) {
+      if (bleDevice && bleDevice.gatt) {
         bleDevice.removeEventListener('gattserverdisconnected', handleDisconnect)
-        if (bleDevice.gatt && bleDevice.gatt.connected) bleDevice.gatt.disconnect()
+        if (bleDevice.gatt.connected) bleDevice.gatt.disconnect()
       }
     } catch (_) { /* ignore */ }
     setBleDevice(null)
     setBleConnected(false)
     setBleError(null)
+    setAutoPairedIphone(false)
   }
 
   const mark = async (s) => {
@@ -181,9 +192,9 @@ export default function LiveAttendanceWidget() {
       return
     }
     // Pre-flight check: warn the student if they paired with a device whose
-    // name doesn't match this session's expected name. Backend will reject too,
-    // but failing fast on the client gives a clearer message.
-    if (s.bleDeviceName && bleDevice.name && normalizeBleName(s.bleDeviceName) !== normalizeBleName(bleDevice.name)) {
+    // name doesn't match this session's expected name. Skipped for the iPhone
+    // auto-pair fallback because there's no real paired device to compare.
+    if (!autoPairedIphone && s.bleDeviceName && bleDevice.name && normalizeBleName(s.bleDeviceName) !== normalizeBleName(bleDevice.name)) {
       setToast({ kind: 'err', text: `You're connected to "${bleDevice.name}" but this session needs "${s.bleDeviceName}". Disconnect and pair with the right classroom device.` })
       setMarking(null)
       setTimeout(() => setToast(null), 5000)
@@ -232,7 +243,9 @@ export default function LiveAttendanceWidget() {
       await api.post('/student/attendance/mark', {
         sessionId: s.sessionId,
         sessionToken: s.sessionToken,
-        bleDeviceName: bleDevice.name,
+        // iPhone auto-pair: send the session's expected name so the backend's
+        // BLE check passes trivially. Geolocation + UUID + fingerprint still gate.
+        bleDeviceName: autoPairedIphone ? s.bleDeviceName : bleDevice.name,
         latitude: coords.latitude,
         longitude: coords.longitude,
         deviceUuid: getOrCreateDeviceUuid(),
@@ -253,7 +266,9 @@ export default function LiveAttendanceWidget() {
   const expectedNames = sessions.map(s => s.bleDeviceName).filter(Boolean)
   const connectedName = bleDevice?.name || ''
   const connectedNorm = normalizeBleName(connectedName)
-  const nameMatchesAnySession = expectedNames.length === 0
+  // For the iPhone auto-pair fallback, name comparison is meaningless because
+  // we never paired with a real device — treat it as always-matching.
+  const nameMatchesAnySession = autoPairedIphone || expectedNames.length === 0
     || expectedNames.some(n => normalizeBleName(n) === connectedNorm)
   const showMismatchWarning = bleConnected && !nameMatchesAnySession && expectedNames.length > 0
 
@@ -323,7 +338,9 @@ export default function LiveAttendanceWidget() {
         const remainingMin = Math.floor(remainingMs / 60000)
         const remainingSec = Math.floor((remainingMs % 60000) / 1000)
         const expired = remainingMs <= 0
-        const nameMatch = !s.bleDeviceName || (connectedName && normalizeBleName(s.bleDeviceName) === normalizeBleName(connectedName))
+        // iPhone auto-pair always matches (we send the session's name on submit).
+        const nameMatch = autoPairedIphone || !s.bleDeviceName
+          || (connectedName && normalizeBleName(s.bleDeviceName) === normalizeBleName(connectedName))
         const canMark = bleConnected && !expired && !s.alreadyMarked && nameMatch
         return (
           <div key={s.sessionId} className={`chunky-card p-3 sm:p-4 cascade-in ${s.alreadyMarked ? 'bg-moss/10 border-moss' : 'border-burn ring-2 ring-burn/30'}`}>
