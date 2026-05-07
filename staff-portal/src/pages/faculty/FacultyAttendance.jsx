@@ -202,9 +202,14 @@ export default function FacultyAttendance() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
+      // Filename: <Course Code> <Section> - <scope>.xlsx
+      // e.g. "CS3001 BSE-243A - 2026-05-07.xlsx" or "CS3001 BSE-243A - latest.xlsx"
       const today = new Date().toISOString().slice(0, 10)
-      const suffix = scope === 'latest' ? 'latest' : scope === 'all' ? 'all-sessions' : today
-      a.download = `attendance-${suffix}.xlsx`
+      const scopeLabel = scope === 'latest' ? 'latest' : scope === 'all' ? 'all-sessions' : today
+      const safe = (s) => (s || '').replace(/[\\/:*?"<>|]/g, '').trim()
+      const cc = safe(course?.courseCode) || `section-${courseId}`
+      const sec = safe(course?.section)
+      a.download = `${cc}${sec ? ' ' + sec : ''} - ${scopeLabel}.xlsx`
       document.body.appendChild(a); a.click(); a.remove()
       URL.revokeObjectURL(url)
       const label = scope === 'latest' ? 'Latest session' : scope === 'all' ? 'All sessions' : "Today's sessions"
@@ -638,7 +643,10 @@ export default function FacultyAttendance() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `attendance-session-${sessionId}.xlsx`
+      const safe = (s) => (s || '').replace(/[\\/:*?"<>|]/g, '').trim()
+      const cc = safe(course?.courseCode) || 'attendance'
+      const sec = safe(course?.section)
+      a.download = `${cc}${sec ? ' ' + sec : ''} - session-${sessionId}.xlsx`
       document.body.appendChild(a); a.click(); a.remove()
       URL.revokeObjectURL(url)
       setToast({ kind: 'ok', text: 'Session sheet downloaded.' })
