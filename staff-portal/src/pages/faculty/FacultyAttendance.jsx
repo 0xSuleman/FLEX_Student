@@ -3,6 +3,7 @@ import {
   KeyRound, Play, Square, Save, Clock, Eye, Hand, X,
   Users, CheckCircle2, XCircle, Coffee, Search, AlertTriangle,
   ListChecks, RefreshCw, Download, Upload,
+  Calendar, BookMarked, ChevronDown,
 } from 'lucide-react'
 import api from '../../services/api'
 import { PageHeader, SectionCard, ActionButton, StatCard } from '../../components/PageShell'
@@ -50,6 +51,8 @@ export default function FacultyAttendance() {
   const [templateStatus, setTemplateStatus] = useState(null)
   const [templateUploading, setTemplateUploading] = useState(false)
   const templateInputRef = useRef(null)
+  const exportMenuRef = useRef(null)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const tickRef = useRef(null)
   const pollRef = useRef(null)
 
@@ -94,6 +97,17 @@ export default function FacultyAttendance() {
     } catch { setTemplateStatus(null) }
   }
   useEffect(() => { loadTemplateStatus() }, [courseId])
+
+  // Close the Export Excel dropdown when clicking outside it.
+  useEffect(() => {
+    const handler = (e) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) {
+        setExportMenuOpen(false)
+      }
+    }
+    if (exportMenuOpen) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [exportMenuOpen])
 
   // On mount / section change: if there's still an OPEN session for this
   // section, restore the live session card so a page refresh doesn't make
@@ -148,24 +162,37 @@ export default function FacultyAttendance() {
     }
   }
 
-  const downloadFilledSheet = async () => {
+  const downloadSheet = async (scope = 'today') => {
     if (!courseId) return
     try {
-      const res = await api.get(`/faculty/sections/${courseId}/attendance/sheet`, { responseType: 'blob' })
+      const res = await api.get(`/faculty/sections/${courseId}/attendance/sheet?scope=${scope}`, { responseType: 'blob' })
       const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       const today = new Date().toISOString().slice(0, 10)
-      a.download = `attendance-${today}.xlsx`
+      const suffix = scope === 'latest' ? 'latest' : scope === 'all' ? 'all-sessions' : today
+      a.download = `attendance-${suffix}.xlsx`
       document.body.appendChild(a); a.click(); a.remove()
       URL.revokeObjectURL(url)
-      setToast({ kind: 'ok', text: "Today's attendance sheet downloaded." })
+      const label = scope === 'latest' ? 'Latest session' : scope === 'all' ? 'All sessions' : "Today's sessions"
+      setToast({ kind: 'ok', text: `${label} downloaded.` })
       clearToastSoon()
     } catch (err) {
-      const msg = err.response?.data instanceof Blob
-        ? "Download failed — make sure a template is uploaded."
-        : ('Download failed: ' + (err.response?.data?.message || err.message))
+      let msg
+      if (err.response?.data instanceof Blob) {
+        // Server returned an error with a Blob body (because we requested blob).
+        // Try to read it as JSON; otherwise fall back to a generic message.
+        try {
+          const text = await err.response.data.text()
+          const parsed = JSON.parse(text)
+          msg = 'Download failed: ' + (parsed.message || text)
+        } catch {
+          msg = "Download failed — make sure a template is uploaded and there are sessions in this scope."
+        }
+      } else {
+        msg = 'Download failed: ' + (err.response?.data?.message || err.message)
+      }
       setToast({ kind: 'err', text: msg })
       clearToastSoon()
     }
@@ -545,25 +572,6 @@ export default function FacultyAttendance() {
 
   const clearToastSoon = () => setTimeout(() => setToast(null), 3500)
 
-  const exportExcel = async () => {
-    if (!courseId) return
-    try {
-      const res = await api.get(`/faculty/sections/${courseId}/attendance/export`, { responseType: 'blob' })
-      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `attendance-section-${courseId}.xlsx`
-      document.body.appendChild(a); a.click(); a.remove()
-      URL.revokeObjectURL(url)
-      setToast({ kind: 'ok', text: 'Attendance sheet downloaded.' })
-      clearToastSoon()
-    } catch (err) {
-      setToast({ kind: 'err', text: 'Export failed: ' + (err.response?.data?.message || err.message) })
-      clearToastSoon()
-    }
-  }
-
   const exportSession = async (sessionId) => {
     try {
       const res = await api.get(`/faculty/attendance/sessions/${sessionId}/export`, { responseType: 'blob' })
@@ -624,16 +632,35 @@ export default function FacultyAttendance() {
               className="bg-mustard text-ink border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
               <Upload size={11} strokeWidth={3} /> {templateUploading ? 'Uploading…' : (templateStatus?.uploaded ? 'Insert Excel Sheet' : 'Insert Excel Sheet')}
             </button>
-            <button onClick={downloadFilledSheet} disabled={!courseId || !templateStatus?.uploaded}
-              title="Download the template you uploaded with today's date column filled in P/A for every student. Submit this to AO/HOD as the day's attendance record."
-              className="bg-burn text-bone border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
-              <Download size={11} strokeWidth={3} /> Today's Sheet
-            </button>
-            <button onClick={exportExcel} disabled={!courseId}
-              title="Download a summary across ALL past sessions for this section: one column per lecture, totals, % per student. Useful for end-of-semester review."
-              className="bg-coffee text-bone border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1 disabled:opacity-50">
-              <Download size={11} strokeWidth={3} /> Overview
-            </button>
+            <div className="relative" ref={exportMenuRef}>
+              <button onClick={() => setExportMenuOpen(v => !v)} disabled={!courseId || !templateStatus?.uploaded}
+                title="Download the uploaded template with attendance columns appended. Choose Today, Latest, or Overview."
+                className="bg-burn text-bone border-2 border-ink rounded px-3 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1.5 disabled:opacity-50">
+                <Download size={11} strokeWidth={3} /> Export Excel
+                <ChevronDown size={10} strokeWidth={3} className={`transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {exportMenuOpen && (
+                <div className="absolute right-0 mt-1.5 w-72 bg-cream border-2 border-ink rounded-md shadow-pixel z-30 overflow-hidden">
+                  <div className="bg-cocoa text-bone px-3 py-2 border-b-2 border-ink">
+                    <div className="font-display text-[10px] uppercase tracking-widest">Download Sheet</div>
+                    <div className="text-[9px] text-tan font-bold mt-0.5 normal-case tracking-normal">Pick a scope · template-format xlsx</div>
+                  </div>
+                  <ExportItem
+                    Icon={Calendar} title="Today" sub="Every session held today (one column per class — handles makeup classes)"
+                    onClick={() => { setExportMenuOpen(false); downloadSheet('today') }}
+                  />
+                  <ExportItem
+                    Icon={Clock} title="Latest Session" sub="Just the most recent lecture's attendance"
+                    onClick={() => { setExportMenuOpen(false); downloadSheet('latest') }}
+                  />
+                  <ExportItem
+                    Icon={BookMarked} title="Overview" sub="Full semester · every session as its own column"
+                    onClick={() => { setExportMenuOpen(false); downloadSheet('all') }}
+                    last
+                  />
+                </div>
+              )}
+            </div>
             <ModeBadge mode={mode} />
           </div>
         </div>
@@ -977,6 +1004,22 @@ function ModeButton({ onClick, Icon, title, sub, accent }) {
         <span className="font-display text-xs text-ink uppercase tracking-wider truncate">{title}</span>
       </div>
       <div className="text-[10px] text-cocoa font-bold leading-snug line-clamp-2">{sub}</div>
+    </button>
+  )
+}
+
+/** A single row in the Export Excel dropdown — icon + bold title + small sub. */
+function ExportItem({ Icon, title, sub, onClick, last }) {
+  return (
+    <button onClick={onClick}
+      className={`group w-full text-left px-3 py-2.5 hover:bg-burn/15 transition-colors flex items-start gap-2.5 ${last ? '' : 'border-b border-cocoa/20'}`}>
+      <div className="w-8 h-8 bg-coffee group-hover:bg-burn border-2 border-ink shadow-pixel-sm rounded-md flex items-center justify-center shrink-0 mt-0.5 transition-colors">
+        <Icon size={14} className="text-bone" strokeWidth={2.8} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-display text-[11px] uppercase tracking-wider text-ink">{title}</div>
+        <div className="text-[10px] text-cocoa font-bold mt-0.5 leading-snug">{sub}</div>
+      </div>
     </button>
   )
 }
