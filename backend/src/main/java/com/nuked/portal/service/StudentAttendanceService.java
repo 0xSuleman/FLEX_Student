@@ -125,7 +125,7 @@ public class StudentAttendanceService {
             if (studentLat == null || studentLon == null) {
                 throw new RuntimeException("Location is required — allow location access in your browser, then retry.");
             }
-            int radius = session.getAllowedRadiusMeters() == null ? 25 : session.getAllowedRadiusMeters();
+            int radius = session.getAllowedRadiusMeters() == null ? 100 : session.getAllowedRadiusMeters();
             double distance = haversineMeters(
                     session.getLatitude(), session.getLongitude(),
                     studentLat, studentLon);
