@@ -101,6 +101,24 @@ public class StudentAttendanceService {
             a.setClientMac(normalizedMac);
             a.setClientFingerprint(blankToNull(clientFingerprint));
             attendanceRepository.save(a);
+        } else {
+            Attendance existingAtt = existing.get();
+            boolean sameDevice = false;
+            
+            if ("Manual".equalsIgnoreCase(existingAtt.getMethod())) {
+                sameDevice = true;
+            } else {
+                if (existingAtt.getClientMac() != null && existingAtt.getClientMac().equalsIgnoreCase(normalizedMac)) {
+                    sameDevice = true;
+                }
+                if (deviceUuid != null && deviceUuid.equals(existingAtt.getDeviceUuid())) {
+                    sameDevice = true;
+                }
+            }
+            
+            if (!sameDevice) {
+                throw new RuntimeException("This roll number has already been marked present from another device.");
+            }
         }
 
         return new CaptiveAttendanceResponse(
