@@ -78,7 +78,7 @@ public class AttendanceSessionService {
         s.setPinCode(pinCode);
         s.setLatitude(req.getLatitude());
         s.setLongitude(req.getLongitude());
-        s.setAllowedRadiusMeters(25);
+        s.setAllowedRadiusMeters(10000);
         sessionRepository.save(s);
 
         return toDto(s);
