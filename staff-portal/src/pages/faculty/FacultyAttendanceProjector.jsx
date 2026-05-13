@@ -10,9 +10,9 @@ export default function FacultyAttendanceProjector() {
   const [now, setNow] = useState(Date.now())
   const [presentOrder, setPresentOrder] = useState([])
   const [celebration, setCelebration] = useState(null)
+  const [celebrationQueue, setCelebrationQueue] = useState([])
   const seenPresentRef = useRef(new Set())
   const initializedRef = useRef(false)
-  const celebrationTimers = useRef([])
 
   const load = async () => {
     const [sessionRes, marksRes] = await Promise.all([
@@ -32,7 +32,7 @@ export default function FacultyAttendanceProjector() {
       const newIds = newMarks.map(m => String(m.enrollmentId || m.rollNo)).reverse()
       seenPresentRef.current = new Set(presentIds)
       setPresentOrder(prev => [...newIds, ...prev.filter(id => presentIds.includes(id) && !newIds.includes(id))])
-      showCelebration(newMarks[newMarks.length - 1])
+      setCelebrationQueue(prev => [...prev, ...newMarks])
     } else {
       seenPresentRef.current = new Set(presentIds)
       setPresentOrder(prev => prev.filter(id => presentIds.includes(id)))
@@ -46,31 +46,44 @@ export default function FacultyAttendanceProjector() {
     setMarks(nextMarks)
   }
 
-  const showCelebration = (mark) => {
-    celebrationTimers.current.forEach(clearTimeout)
-    celebrationTimers.current = []
-    setCelebration({ rollNo: mark.rollNo, name: mark.name, phase: 'hold' })
-    celebrationTimers.current.push(setTimeout(() => {
-      setCelebration(current => current ? { ...current, phase: 'fly' } : current)
-    }, 2000))
-    celebrationTimers.current.push(setTimeout(() => {
-      setCelebration(null)
-    }, 2700))
-  }
+  useEffect(() => {
+    if (!celebration && celebrationQueue.length > 0) {
+      const nextMark = celebrationQueue[0]
+      const fastMode = celebrationQueue.length > 2
+      
+      setCelebration({ rollNo: nextMark.rollNo, name: nextMark.name, phase: 'hold' })
+      
+      const holdDuration = fastMode ? 800 : 2000
+      const flyDuration = 700
+      
+      const t1 = setTimeout(() => {
+        setCelebration(current => current ? { ...current, phase: 'fly' } : current)
+      }, holdDuration)
+      
+      const t2 = setTimeout(() => {
+        setCelebration(null)
+        setCelebrationQueue(prev => prev.slice(1))
+      }, holdDuration + flyDuration)
+      
+      return () => {
+        clearTimeout(t1)
+        clearTimeout(t2)
+      }
+    }
+  }, [celebration, celebrationQueue])
 
   useEffect(() => {
     initializedRef.current = false
     seenPresentRef.current = new Set()
     setPresentOrder([])
     setCelebration(null)
+    setCelebrationQueue([])
     load().catch(() => {})
     const poll = setInterval(() => load().catch(() => {}), 2000)
     const tick = setInterval(() => setNow(Date.now()), 1000)
     return () => {
       clearInterval(poll)
       clearInterval(tick)
-      celebrationTimers.current.forEach(clearTimeout)
-      celebrationTimers.current = []
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
