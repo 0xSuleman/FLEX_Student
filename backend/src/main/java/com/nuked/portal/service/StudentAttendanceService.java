@@ -97,19 +97,21 @@ public class StudentAttendanceService {
                     "The attendance window for this session has expired. Ask your teacher to open a new session.");
         }
 
-        // PIN check: the 6-digit code the teacher announced when opening the
-        // session must match exactly. The PIN is short-lived (window expires
-        // when the session closes) and combined with geolocation below.
-        String expected = session.getPinCode();
+        // PIN check: optional on mac-attendance branch. The proximity gate is
+        // "you reached the Mac's local IP" — only possible when on the same
+        // Wi-Fi router as the teacher. If the student sends a PIN, we still
+        // enforce it (faculty can keep using PIN flow if they want). If they
+        // don't, we skip the check and rely on Wi-Fi reachability + geo +
+        // device UUID + fingerprint instead.
         String reported = reportedPinCode == null ? null : reportedPinCode.trim();
-        if (expected == null || expected.trim().isEmpty()) {
-            throw new RuntimeException("Session has no PIN — re-open the session.");
-        }
-        if (reported == null || reported.isEmpty()) {
-            throw new RuntimeException("Enter the 6-digit PIN your teacher announced.");
-        }
-        if (!expected.equals(reported)) {
-            throw new RuntimeException("Wrong PIN — check the code on your teacher's screen and re-enter.");
+        if (reported != null && !reported.isEmpty()) {
+            String expected = session.getPinCode();
+            if (expected == null || expected.trim().isEmpty()) {
+                throw new RuntimeException("Session has no PIN — re-open the session.");
+            }
+            if (!expected.equals(reported)) {
+                throw new RuntimeException("Wrong PIN — check the code on your teacher's screen and re-enter.");
+            }
         }
 
         // Geolocation gate: student must be within radius of where the teacher

@@ -32,6 +32,19 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
+                // Captive-portal detection URLs that iOS / Android / Windows hit
+                // when joining Wi-Fi to check for internet. Returning 200 makes
+                // phones believe the network has internet so they don't fall
+                // back to cellular and route the portal request away.
+                .requestMatchers(
+                        "/hotspot-detect.html",
+                        "/library/test/success.html",
+                        "/generate_204",
+                        "/gen_204",
+                        "/ncsi.txt",
+                        "/connecttest.txt",
+                        "/success.txt"
+                ).permitAll()
                 .requestMatchers("/api/faculty/**").hasRole("FACULTY")
                 .requestMatchers("/api/hod/**").hasRole("HOD")
                 .requestMatchers("/api/ao/**").hasAnyRole("AO", "ASST_AO", "MANAGER", "ASST_MANAGER")

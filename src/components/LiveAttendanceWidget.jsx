@@ -52,7 +52,6 @@ export default function LiveAttendanceWidget() {
   const [marking, setMarking] = useState(null)
   const [toast, setToast] = useState(null)
   const [now, setNow] = useState(Date.now())
-  const [pinInputs, setPinInputs] = useState({})
   const pollRef = useRef(null)
   const tickRef = useRef(null)
 
@@ -73,22 +72,12 @@ export default function LiveAttendanceWidget() {
     }
   }, [])
 
-  const setPin = (sessionId, value) => {
-    // Strip non-digits, cap at 6 chars.
-    const cleaned = (value || '').replace(/\D/g, '').slice(0, 6)
-    setPinInputs(prev => ({ ...prev, [sessionId]: cleaned }))
-  }
-
   const mark = async (s) => {
-    const pin = (pinInputs[s.sessionId] || '').trim()
+    // mac-attendance branch: PIN entry is gone — proximity is proven by the
+    // student reaching the Mac on the local Wi-Fi router. Geo + UUID +
+    // fingerprint still gate the request server-side.
     setMarking(s.sessionId)
     setToast(null)
-    if (pin.length !== 6) {
-      setToast({ kind: 'err', text: 'Enter the 6-digit PIN your teacher announced.' })
-      setMarking(null)
-      setTimeout(() => setToast(null), 4000)
-      return
-    }
     if (!navigator.geolocation) {
       setToast({ kind: 'err', text: 'Geolocation not supported in this browser.' })
       setMarking(null)
@@ -130,14 +119,14 @@ export default function LiveAttendanceWidget() {
       await api.post('/student/attendance/mark', {
         sessionId: s.sessionId,
         sessionToken: s.sessionToken,
-        pinCode: pin,
+        // PIN intentionally omitted on this branch — Wi-Fi reachability is the
+        // proximity gate. Backend skips PIN check when this field is empty.
         latitude: coords.latitude,
         longitude: coords.longitude,
         deviceUuid: getOrCreateDeviceUuid(),
         clientFingerprint: getClientFingerprint(),
       })
       setToast({ kind: 'ok', text: `Present marked for ${s.courseCode} · ${s.section}.` })
-      setPinInputs(prev => ({ ...prev, [s.sessionId]: '' }))
       poll()
     } catch (err) {
       setToast({ kind: 'err', text: err.response?.data?.message || err.message || 'Failed to mark' })
@@ -160,7 +149,7 @@ export default function LiveAttendanceWidget() {
             Live Session
           </div>
           <div className="text-[11px] text-cocoa font-bold mt-0.5">
-            Enter the 6-digit PIN your teacher announced. Your location is verified to confirm you are in the classroom.
+            You're on the classroom network. Tap <span className="font-extrabold">Mark Present</span> below — your device is logged for audit and your location is verified.
           </div>
         </div>
       </div>
@@ -177,8 +166,7 @@ export default function LiveAttendanceWidget() {
         const remainingMin = Math.floor(remainingMs / 60000)
         const remainingSec = Math.floor((remainingMs % 60000) / 1000)
         const expired = remainingMs <= 0
-        const pinValue = pinInputs[s.sessionId] || ''
-        const canMark = !expired && !s.alreadyMarked && pinValue.length === 6
+        const canMark = !expired && !s.alreadyMarked
         return (
           <div key={s.sessionId} className={`chunky-card p-3 sm:p-4 cascade-in ${s.alreadyMarked ? 'bg-moss/10 border-moss' : 'border-burn ring-2 ring-burn/30'}`}>
             <div className="flex items-start gap-3 sm:gap-4 flex-wrap">
@@ -204,23 +192,12 @@ export default function LiveAttendanceWidget() {
             </div>
 
             {!s.alreadyMarked && !expired && (
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="\d{6}"
-                  maxLength={6}
-                  autoComplete="one-time-code"
-                  placeholder="Enter 6-digit PIN"
-                  value={pinValue}
-                  onChange={(e) => setPin(s.sessionId, e.target.value)}
-                  className="w-full bg-bone border-2 border-ink rounded-md px-3 py-2.5 font-mono text-base sm:text-lg text-ink tracking-[0.3em] tabular-nums focus:outline-none focus:ring-2 focus:ring-burn"
-                />
+              <div className="mt-3">
                 <button
                   disabled={marking === s.sessionId || !canMark}
                   onClick={() => mark(s)}
-                  title={canMark ? 'Mark Present' : 'Enter the 6-digit PIN first'}
-                  className="w-full sm:w-auto bg-burn text-bone border-2 border-ink rounded-md px-4 py-2.5 font-display text-xs uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Mark Present"
+                  className="w-full bg-burn text-bone border-2 border-ink rounded-md px-4 py-3 font-display text-sm uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {marking === s.sessionId ? (
                     <>
