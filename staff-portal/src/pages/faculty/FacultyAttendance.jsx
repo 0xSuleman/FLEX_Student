@@ -234,8 +234,8 @@ export default function FacultyAttendance() {
       try {
         const res = await api.get(`/faculty/attendance/sessions/${activeSession.id}/marks`)
         const arr = Array.isArray(res.data) ? res.data : []
-        let newLatest = null
         setRoster(prev => {
+          let newLatest = null
           const next = prev.map(r => {
             const live = arr.find(m => m.enrollmentId === r.enrollmentId)
             if (!live || !live.presence) return r
@@ -246,11 +246,11 @@ export default function FacultyAttendance() {
                          : live.presence === 'L' ? 'Leave' : r.status
             return { ...r, status, method: live.method || 'Automated', deviceUuid: live.deviceUuid, clientIp: live.clientIp, clientMac: live.clientMac, clientFingerprint: live.clientFingerprint }
           })
+          if (newLatest) {
+            setTimeout(() => setLatestMark(newLatest), 0)
+          }
           return next
         })
-        if (newLatest) {
-          setLatestMark(newLatest)
-        }
       } catch { /* keep last good */ }
     }, 2000)
     return () => clearInterval(pollRef.current)
@@ -791,8 +791,9 @@ export default function FacultyAttendance() {
                   <Wifi size={18} className="text-coffee" strokeWidth={3} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-extrabold uppercase tracking-widest opacity-80">&gt; Student access</div>
-                  <div className="font-mono font-extrabold text-base md:text-lg mt-0.5 break-all">SSID {networkStatus?.ssid || 'Mark-Attendence'} · attendence.fast</div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-widest opacity-80 mb-1">&gt; Student access</div>
+                  <div className="font-mono font-bold text-sm leading-tight truncate"><span className="opacity-75">Wifi:</span> {networkStatus?.ssid || 'Mark-Attendence'}</div>
+                  <div className="font-mono font-bold text-sm leading-tight truncate"><span className="opacity-75">url:</span> attendence.fast</div>
                 </div>
                 <button onClick={() => window.open(`/faculty/attendance/projector/${activeSession.id}`, '_blank')}
                   className="bg-bone text-ink border-2 border-ink rounded px-2.5 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1">
