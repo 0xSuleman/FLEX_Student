@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 /**
  * Catches every uncaught exception thrown from a controller / service and
  * returns a JSON body the frontend can display:
- *   { "message": "Wrong PIN — ...", "status": 400, "timestamp": "..." }
+ *   { "message": "Invalid request ...", "status": 400, "timestamp": "..." }
  *
  * Without this, Spring returns blank-body 403/500s and the user just sees
  * axios's default "Request failed with status code 403", which is useless.
@@ -63,7 +63,7 @@ public class GlobalExceptionHandler {
 
     /**
      * RuntimeException is what most of the codebase uses for domain errors
-     * (wrong PIN, out of range, expired session, etc). Treat as 400 so the
+     * (invalid roll, expired session, duplicate device, etc). Treat as 400 so the
      * frontend gets the real message instead of a blank 500.
      */
     @ExceptionHandler(RuntimeException.class)

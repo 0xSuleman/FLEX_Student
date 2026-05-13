@@ -50,9 +50,14 @@ services:
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       JWT_SECRET: ${JWT_SECRET:-a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2}
       JWT_EXPIRATION: 86400000
+      CAPTIVE_COMMANDER_URL: ${CAPTIVE_COMMANDER_URL:-http://host.docker.internal}
+      CAPTIVE_BACKEND_URL: ${CAPTIVE_BACKEND_URL:-http://127.0.0.1:8090}
+      CAPTIVE_COMMANDER_SECRET: ${CAPTIVE_COMMANDER_SECRET:-dev-captive-secret}
       JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75"
     ports:
       - "8090:8080"   # host 8090 (lost-and-found project owns 8080)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks: [nuked-net]
 
 volumes:

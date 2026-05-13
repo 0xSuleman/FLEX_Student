@@ -17,7 +17,7 @@ export default function ItDashboard() {
         <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-3">
           <Health label="Auth Service" value="OK" tone="bg-moss text-cream" />
           <Health label="Database" value="OK" tone="bg-moss text-cream" />
-          <Health label="BLE Module" value="OK" tone="bg-moss text-cream" />
+          <Health label="Attendance Network" value="OK" tone="bg-moss text-cream" />
           <Health label="Payment Gateway" value="OK" tone="bg-moss text-cream" />
           <Health label="Email Service" value="OK" tone="bg-moss text-cream" />
           <Health label="Notification Bus" value="OK" tone="bg-moss text-cream" />

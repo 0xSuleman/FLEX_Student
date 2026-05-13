@@ -8,6 +8,7 @@ import FacultyLayout from './pages/faculty/FacultyLayout'
 import FacultyDashboard from './pages/faculty/FacultyDashboard'
 import FacultyCourses from './pages/faculty/FacultyCourses'
 import FacultyAttendance from './pages/faculty/FacultyAttendance'
+import FacultyAttendanceProjector from './pages/faculty/FacultyAttendanceProjector'
 import FacultyMarks from './pages/faculty/FacultyMarks'
 import FacultyGrading from './pages/faculty/FacultyGrading'
 import FacultyWithdrawals from './pages/faculty/FacultyWithdrawals'
@@ -87,6 +88,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<StaffLogin />} />
+
+      <Route path="/faculty/attendance/projector/:sessionId" element={<Gated role="faculty"><FacultyAttendanceProjector /></Gated>} />
 
       {/* Faculty (uses its own existing layout) */}
       <Route element={<Gated role="faculty"><FacultyLayout /></Gated>}>

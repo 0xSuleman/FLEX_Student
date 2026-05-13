@@ -31,7 +31,7 @@ public class Attendance {
     @Column(length = 2)
     private String presence;
 
-    /** "Bluetooth" | "Manual" | "Auto" — populated when marked via a faculty BLE session. */
+    /** "Automated" | "Manual" | "Auto" — source that produced this mark. */
     @Column(length = 16)
     private String method;
 
@@ -54,6 +54,14 @@ public class Attendance {
      */
     @Column(name = "client_ip", length = 64)
     private String clientIp;
+
+    /**
+     * Physical device address observed from the captive hotspot ARP table.
+     * This is the strongest automated attendance signal: one MAC cannot mark attendance
+     * for multiple enrollments in the same live session.
+     */
+    @Column(name = "client_mac", length = 32)
+    private String clientMac;
 
     /**
      * Cross-browser device signature: screen dimensions + language + timezone,

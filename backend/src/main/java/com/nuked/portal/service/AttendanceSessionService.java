@@ -59,29 +59,23 @@ public class AttendanceSessionService {
             sessionRepository.flush();
         }
 
-        // BLE device name MUST be provided — it's what students will pair to
-        // when they Connect Bluetooth. Whatever the teacher's device is
-        // currently broadcasting under (laptop name, phone name, beacon name).
-        String bleName = req.getBleDeviceName() == null ? null : req.getBleDeviceName().trim();
-        if (bleName == null || bleName.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Bluetooth device name is required — type the exact name your laptop / phone is broadcasting under.");
-        }
+        String mode = req.getMode() == null || req.getMode().isBlank()
+                ? "AUTOMATED"
+                : req.getMode().trim().toUpperCase();
+        if (!"MANUAL".equals(mode)) mode = "AUTOMATED";
+        String tokenPrefix = "MANUAL".equals(mode) ? "MAN-" : "AUT-";
 
         AttendanceSession s = new AttendanceSession();
         s.setFacultySection(fs);
         s.setLectureDate(LocalDate.now());
         s.setLectureNo(nextLectureNo(fs));
         s.setTopic(req.getTopic());
-        s.setSessionToken("BLE-" + fs.getCourse().getCode() + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase());
+        s.setSessionToken(tokenPrefix + fs.getCourse().getCode() + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase());
         s.setStartedAt(now);
         s.setEndsAt(now.plusSeconds(duration * 60L));
         s.setStatus(AttendanceSession.Status.OPEN);
         s.setDurationMinutes(duration);
-        s.setBleDeviceName(bleName);
-        s.setLatitude(req.getLatitude());
-        s.setLongitude(req.getLongitude());
-        s.setAllowedRadiusMeters(2000);
+        s.setMode(mode);
         sessionRepository.save(s);
 
         return toDto(s);
@@ -94,8 +88,8 @@ public class AttendanceSessionService {
 
     /**
      * Live snapshot of every student in the section + their current mark in this session
-     * (or "Pending" if no Attendance row exists yet). Powers the faculty's BLE roster
-     * polling so the simulator can be removed.
+     * (or "Pending" if no Attendance row exists yet). Powers the live roster
+     * polling on the faculty attendance page.
      */
     public List<SessionMarkDTO> liveMarks(String username, Long sessionId) {
         AttendanceSession s = loadOwned(username, sessionId);
@@ -110,6 +104,7 @@ public class AttendanceSessionService {
             String method = marked.map(Attendance::getMethod).orElse(null);
             String deviceUuid = marked.map(Attendance::getDeviceUuid).orElse(null);
             String clientIp = marked.map(Attendance::getClientIp).orElse(null);
+            String clientMac = marked.map(Attendance::getClientMac).orElse(null);
             String clientFingerprint = marked.map(Attendance::getClientFingerprint).orElse(null);
             out.add(new SessionMarkDTO(
                     e.getId(),
@@ -120,6 +115,7 @@ public class AttendanceSessionService {
                     null,
                     deviceUuid,
                     clientIp,
+                    clientMac,
                     clientFingerprint));
         }
         return out;
@@ -319,7 +315,6 @@ public class AttendanceSessionService {
                 s.getClosedAt(),
                 s.getStatus().name(),
                 s.getDurationMinutes(),
-                s.getBleDeviceName(),
-                s.getPinCode());
+                s.getMode());
     }
 }

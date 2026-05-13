@@ -13,6 +13,6 @@ public class CloseSessionRequest {
     public static class MarkEntry {
         private Long enrollmentId;
         private String presence; // "P" | "A" | "L"
-        private String method;   // "Bluetooth" | "Manual" | "Auto"
+        private String method;   // "Automated" | "Manual" | "Auto"
     }
 }

@@ -22,7 +22,7 @@ public class AttendanceDTO {
         private String date;
         private Double durationHrs;
         private String presence;
-        /** "Bluetooth" | "Manual" | "Auto" — null for legacy seeded data. */
+        /** "Automated" | "Manual" | "Auto" — null for seeded data. */
         private String method;
     }
 }

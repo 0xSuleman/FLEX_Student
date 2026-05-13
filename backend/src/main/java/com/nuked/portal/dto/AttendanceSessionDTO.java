@@ -23,6 +23,5 @@ public class AttendanceSessionDTO {
     private Instant closedAt;
     private String status;
     private Integer durationMinutes;
-    private String bleDeviceName;
-    private String pinCode;
+    private String mode;
 }

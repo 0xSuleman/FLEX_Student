@@ -19,5 +19,5 @@ export function ItLogs() {
 export function ItSettings() {
   return <StubPage kicker="System" KickerIcon={Settings} title="SYSTEM SETTINGS"
     subtitle="No-code configuration for academic year, semester windows, fee defaults."
-    bullets={['Configure new academic year + semester without code', 'BLE module on/off + window defaults', 'Notification channel routing']} />
+    bullets={['Configure new academic year + semester without code', 'Automated attendence network defaults', 'Notification channel routing']} />
 }

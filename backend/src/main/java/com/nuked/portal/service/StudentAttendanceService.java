@@ -1,6 +1,6 @@
 package com.nuked.portal.service;
 
-import com.nuked.portal.dto.OpenSessionForStudentDTO;
+import com.nuked.portal.dto.CaptiveAttendanceResponse;
 import com.nuked.portal.model.Attendance;
 import com.nuked.portal.model.AttendanceSession;
 import com.nuked.portal.model.Enrollment;
@@ -14,132 +14,49 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.text.Normalizer;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class StudentAttendanceService {
+    private static final Pattern ROLL_PATTERN = Pattern.compile("^[0-9]{2}[A-Z]-[0-9]{4}$");
+    private static final Pattern MAC_PATTERN = Pattern.compile("^[0-9a-f]{2}(:[0-9a-f]{2}){5}$");
 
     private final StudentRepository studentRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final AttendanceSessionRepository sessionRepository;
     private final AttendanceRepository attendanceRepository;
 
-    public List<OpenSessionForStudentDTO> openSessionsForStudent(String rollNo) {
-        Student student = studentRepository.findByRollNo(rollNo)
-                .orElseThrow(() -> new AccessDeniedException(
-                        "Your account isn't registered. Sign out and sign back in — if it still fails, contact your faculty."));
-
-        // Look across the student's *current* (Spring 2026) enrollments.
-        List<Enrollment> enrollments = enrollmentRepository.findByStudentIdAndSemester(student.getId(), "Spring 2026");
-
-        List<OpenSessionForStudentDTO> out = new ArrayList<>();
-        Instant now = Instant.now();
-        for (Enrollment e : enrollments) {
-            List<AttendanceSession> open = sessionRepository
-                    .findByStatusAndFacultySectionCourseIdAndFacultySectionSectionAndFacultySectionSemester(
-                            AttendanceSession.Status.OPEN,
-                            e.getCourse().getId(),
-                            e.getSection(),
-                            e.getSemester());
-            // Defense in depth: even if multiple OPEN sessions slip through
-            // (auto-close race, prior-branch leftovers), only surface the
-            // single most-recent unexpired one to the student.
-            AttendanceSession latest = null;
-            for (AttendanceSession s : open) {
-                if (s.getEndsAt() != null && s.getEndsAt().isBefore(now)) continue;
-                if (latest == null || s.getStartedAt().isAfter(latest.getStartedAt())) {
-                    latest = s;
-                }
-            }
-            if (latest == null) continue;
-            boolean alreadyMarked = attendanceRepository
-                    .findBySessionIdAndEnrollmentId(latest.getId(), e.getId()).isPresent();
-            out.add(new OpenSessionForStudentDTO(
-                    latest.getId(),
-                    e.getId(),
-                    e.getCourse().getCode(),
-                    e.getCourse().getName(),
-                    e.getSection(),
-                    latest.getTopic(),
-                    latest.getLectureDate(),
-                    latest.getStartedAt(),
-                    latest.getEndsAt(),
-                    latest.getSessionToken(),
-                    alreadyMarked,
-                    latest.getBleDeviceName()));
-        }
-        return out;
-    }
-
     @Transactional
-    public OpenSessionForStudentDTO markPresent(String rollNo, Long sessionId,
-                                                String reportedBleDeviceName,
-                                                Double studentLat, Double studentLon,
-                                                String deviceUuid, String clientIp,
-                                                String clientFingerprint) {
-        Student student = studentRepository.findByRollNo(rollNo)
+    public CaptiveAttendanceResponse markPresentCaptive(String rollNo, Long sessionId,
+                                                        String deviceUuid, String clientIp,
+                                                        String clientFingerprint, String clientMac) {
+        String normalizedRoll = normalizeRoll(rollNo);
+        if (!ROLL_PATTERN.matcher(normalizedRoll).matches()) {
+            throw new IllegalArgumentException("Roll number must look like 24L-3072.");
+        }
+
+        String normalizedMac = normalizeMac(clientMac);
+        if (normalizedMac == null) {
+            throw new RuntimeException("Could not identify this device on the attendance hotspot. Reconnect to Mark-Attendence and retry.");
+        }
+
+        Student student = studentRepository.findByRollNo(normalizedRoll)
                 .orElseThrow(() -> new AccessDeniedException(
-                        "Your account isn't registered. Sign out and sign back in — if it still fails, ask your faculty to check your enrollment."));
+                        "Roll number is not registered in the portal."));
         AttendanceSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException(
-                        "This attendance session no longer exists. Refresh and try again."));
+                        "This attendance session no longer exists. Ask your teacher to reopen it."));
 
         if (session.getStatus() != AttendanceSession.Status.OPEN) {
-            throw new RuntimeException(
-                    "The teacher has already closed this attendance session. Ask them to open a new one.");
+            throw new RuntimeException("The teacher has already closed this attendance session.");
         }
         if (session.getEndsAt() != null && session.getEndsAt().isBefore(Instant.now())) {
-            throw new RuntimeException(
-                    "The attendance window for this session has expired. Ask your teacher to open a new session.");
+            throw new RuntimeException("The attendance window has expired.");
         }
 
-        // BLE proximity check: the BLE device the student paired with MUST
-        // equal the name the teacher registered when opening the session.
-        // Names are normalized first — curly vs straight quotes, casing,
-        // and surrounding whitespace shouldn't cause false mismatches when
-        // the strings are visually identical on screen.
-        String expected = session.getBleDeviceName();
-        String reported = reportedBleDeviceName;
-        if (expected == null || expected.trim().isEmpty()) {
-            throw new RuntimeException(
-                    "This session has no registered BLE device name — ask your teacher to re-open it.");
-        }
-        if (reported == null || reported.trim().isEmpty()) {
-            throw new RuntimeException(
-                    "Pair Bluetooth first — attendance can't be marked without a paired device.");
-        }
-        if (!normalizeName(expected).equals(normalizeName(reported))) {
-            throw new RuntimeException("Bluetooth device mismatch — you paired with '"
-                    + reported.trim() + "' but this session is bound to '"
-                    + expected.trim() + "'. Pair with the teacher's device and retry.");
-        }
-
-        // Geolocation gate: student must be within radius of where the teacher
-        // opened the session. Skipped only if the session has no recorded
-        // location (older sessions / faculty denied permission at open-time).
-        if (session.getLatitude() != null && session.getLongitude() != null) {
-            if (studentLat == null || studentLon == null) {
-                throw new RuntimeException("Location is required — allow location access in your browser, then retry.");
-            }
-            // Demo radius: enforce a generous 2km so flaky indoor GPS doesn't
-            // false-reject during the live demo. Error message keeps the
-            // strict-looking 25m so the visible policy stays consistent.
-            int radius = session.getAllowedRadiusMeters() == null ? 2000 : session.getAllowedRadiusMeters();
-            double distance = haversineMeters(
-                    session.getLatitude(), session.getLongitude(),
-                    studentLat, studentLon);
-            if (distance > radius) {
-                throw new RuntimeException(String.format(
-                        "You're %.0f m from the classroom (max 25 m). Move closer to mark attendance.",
-                        distance));
-            }
-        }
-
-        // Find the student's enrollment matching this session's course/section/semester
         var fs = session.getFacultySection();
         Enrollment match = enrollmentRepository
                 .findByStudentIdAndSemester(student.getId(), fs.getSemester())
@@ -147,44 +64,46 @@ public class StudentAttendanceService {
                 .filter(e -> e.getCourse().getId().equals(fs.getCourse().getId()) && fs.getSection().equals(e.getSection()))
                 .findFirst()
                 .orElseThrow(() -> new AccessDeniedException(
-                        "You aren't enrolled in this section. The teacher may have opened the session for a different class."));
+                        "This roll number is not enrolled in the active section."));
 
-        // Per-session device binding: if the same browser UUID has already
-        // marked attendance for a *different* enrollment in this session,
-        // reject the new mark — catches "log out, log in as friend" cheats.
-        // Skipped if the client didn't send a UUID (unknown browser fallback).
-        if (deviceUuid != null && !deviceUuid.isBlank()) {
-            var collision = attendanceRepository
-                    .findFirstBySessionIdAndDeviceUuidAndEnrollmentIdNot(sessionId, deviceUuid, match.getId());
-            if (collision.isPresent()) {
-                String otherRoll = collision.get().getEnrollment() != null
-                        && collision.get().getEnrollment().getStudent() != null
-                        ? collision.get().getEnrollment().getStudent().getRollNo()
-                        : "another student";
-                throw new RuntimeException(
-                        "This device already marked attendance for " + otherRoll
-                        + " in this session. Each student must mark from their own device.");
-            }
-        }
-
-        // Idempotent — if already marked we just return the existing entry's view
         var existing = attendanceRepository.findBySessionIdAndEnrollmentId(sessionId, match.getId());
         if (existing.isEmpty()) {
+            if (deviceUuid != null && !deviceUuid.isBlank()) {
+                var uuidCollision = attendanceRepository
+                        .findFirstBySessionIdAndDeviceUuidAndEnrollmentIdNot(sessionId, deviceUuid, match.getId());
+                if (uuidCollision.isPresent()) {
+                    String otherRoll = rollFor(uuidCollision.get());
+                    throw new RuntimeException(
+                            "This browser already marked attendance for " + otherRoll
+                            + ". Each student must use their own device.");
+                }
+            }
+
+            var macCollision = attendanceRepository
+                    .findFirstBySessionIdAndClientMacAndEnrollmentIdNot(sessionId, normalizedMac, match.getId());
+            if (macCollision.isPresent()) {
+                String otherRoll = rollFor(macCollision.get());
+                throw new RuntimeException(
+                        "This phone already marked attendance for " + otherRoll
+                        + ". Each student must use their own phone.");
+            }
+
             Attendance a = new Attendance();
             a.setEnrollment(match);
             a.setLectureNo(session.getLectureNo());
             a.setDate(session.getLectureDate());
             a.setDurationHrs(durationFor(fs.getCourse().getCreditHours()));
             a.setPresence("P");
-            a.setMethod("Bluetooth");
+            a.setMethod("Automated");
             a.setSessionId(sessionId);
-            a.setDeviceUuid(deviceUuid);
-            a.setClientIp(clientIp);
-            a.setClientFingerprint(clientFingerprint);
+            a.setDeviceUuid(blankToNull(deviceUuid));
+            a.setClientIp(blankToNull(clientIp));
+            a.setClientMac(normalizedMac);
+            a.setClientFingerprint(blankToNull(clientFingerprint));
             attendanceRepository.save(a);
         }
 
-        return new OpenSessionForStudentDTO(
+        return new CaptiveAttendanceResponse(
                 sessionId,
                 match.getId(),
                 fs.getCourse().getCode(),
@@ -194,35 +113,30 @@ public class StudentAttendanceService {
                 session.getLectureDate(),
                 session.getStartedAt(),
                 session.getEndsAt(),
-                session.getSessionToken(),
-                true,
-                session.getBleDeviceName());
+                true);
     }
 
-    /**
-     * Aggressively normalize a BLE device name so visually-identical names
-     * compare equal. Handles every common source of false mismatches:
-     *   - case differences ("MacBook Air" vs "macbook air")
-     *   - curly vs straight apostrophes/quotes (Apple injects U+2019)
-     *   - non-breaking spaces, narrow no-break spaces, em/en spaces
-     *   - zero-width chars (joiners, BOM, soft-hyphen)
-     *   - leading/trailing whitespace + collapsed runs of inner whitespace
-     *   - NFKC unicode form so wide/compatibility variants fold
-     *   - all remaining punctuation stripped — only letters/digits/spaces remain
-     * Net effect: only the *visible word content* matters.
-     */
-    private static String normalizeName(String s) {
-        if (s == null) return "";
-        // Unicode compatibility decomposition fold ("ｍａｃ" → "mac" etc).
-        String n = Normalizer.normalize(s, Normalizer.Form.NFKC);
-        // Strip zero-width / format characters.
-        n = n.replaceAll("[\\u200B-\\u200F\\uFEFF\\u00AD]", "");
-        // Replace any unicode whitespace (NBSP etc) with a regular space.
-        n = n.replaceAll("\\p{Z}|\\s", " ");
-        // Drop punctuation entirely so apostrophes/dashes/dots can't differ.
-        n = n.replaceAll("[\\p{P}\\p{S}]", "");
-        // Collapse runs of spaces and lowercase + trim.
-        return n.replaceAll(" +", " ").trim().toLowerCase();
+    private static String normalizeRoll(String rollNo) {
+        return rollNo == null ? "" : rollNo.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private static String normalizeMac(String mac) {
+        if (mac == null) return null;
+        String normalized = mac.trim().toLowerCase(Locale.ROOT).replace('-', ':');
+        if (!MAC_PATTERN.matcher(normalized).matches()) return null;
+        return normalized;
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static String rollFor(Attendance attendance) {
+        return attendance.getEnrollment() != null
+                && attendance.getEnrollment().getStudent() != null
+                && attendance.getEnrollment().getStudent().getRollNo() != null
+                ? attendance.getEnrollment().getStudent().getRollNo()
+                : "another student";
     }
 
     /**
@@ -234,15 +148,4 @@ public class StudentAttendanceService {
         return (creditHours != null && creditHours == 3) ? 1.5 : 3.0;
     }
 
-    /** Haversine great-circle distance between two lat/long points, in meters. */
-    private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
-        double R = 6_371_000;
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLon = Math.toRadians(lon2 - lon1);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    }
 }

@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import {
-  Bluetooth, Play, Square, Save, Clock, Eye, Hand, X,
+  Wifi, Play, Square, Save, Clock, Eye, Hand, X,
   Users, CheckCircle2, XCircle, Coffee, Search, AlertTriangle,
   ListChecks, RefreshCw, Download, Upload,
-  Calendar, BookMarked, ChevronDown,
+  Calendar, BookMarked, ChevronDown, ExternalLink,
 } from 'lucide-react'
 import api from '../../services/api'
 import { PageHeader, SectionCard, ActionButton, StatCard } from '../../components/PageShell'
@@ -12,8 +12,8 @@ import { PageHeader, SectionCard, ActionButton, StatCard } from '../../component
 const IDLE = 'idle'
 const VIEW = 'view'
 const EDIT = 'edit'
-const BLE  = 'ble'      // PIN-driven student self-mark + faculty roster polling
-const MANUAL = 'manual' // Faculty-only marking — opens a session, hides the PIN, taps students to set P/A/L
+const AUTO  = 'automated' // Captive Wi-Fi automated self-mark + faculty roster polling
+const MANUAL = 'manual' // Faculty-only marking — opens a session, hides self-marking, taps students to set P/A/L
 
 const STATUS_TONE = {
   Present: 'bg-moss text-cream',
@@ -32,13 +32,10 @@ export default function FacultyAttendance() {
   const [courseId, setCourseId] = useState(null)
   const [mode, setMode] = useState(IDLE)
   const [roster, setRoster] = useState([])
-  const [bleSession, setBleSession] = useState(null)
+  const [activeSession, setActiveSession] = useState(null)
   const [topic, setTopic] = useState('')
   const [duration, setDuration] = useState(15)
-  // BLE-secure branch: faculty types the broadcasting device's name when
-  // opening a session. Students must pair with that exact device.
-  const [bleDeviceName, setBleDeviceName] = useState('')
-  const [bleSupported, setBleSupported] = useState(false)
+  const [networkStatus, setNetworkStatus] = useState(null)
   const [now, setNow] = useState(Date.now())
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState(null)
@@ -57,12 +54,9 @@ export default function FacultyAttendance() {
   const exportButtonRef = useRef(null)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [exportMenuPos, setExportMenuPos] = useState(null)
+  const [latestMark, setLatestMark] = useState(null)
   const tickRef = useRef(null)
   const pollRef = useRef(null)
-
-  useEffect(() => {
-    setBleSupported(typeof navigator !== 'undefined' && 'bluetooth' in navigator)
-  }, [])
 
   // Load assigned sections
   useEffect(() => {
@@ -143,7 +137,7 @@ export default function FacultyAttendance() {
 
   // On mount / section change: if there's still an OPEN session for this
   // section, restore the live session card so a page refresh doesn't make
-  // the live PIN window vanish from the faculty view. We pick the most
+  // the live automated attendance window vanish from the faculty view. We pick the most
   // recent open + unexpired one (matches the student-side dedupe).
   useEffect(() => {
     if (!courseId) return
@@ -157,17 +151,16 @@ export default function FacultyAttendance() {
           .filter(s => s.status === 'OPEN' && new Date(s.endsAt).getTime() > now)
           .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0]
         if (cancelled || !live) return
-        setBleSession({
+        setActiveSession({
           id: live.id,
-          sessionToken: live.sessionToken,
-          bleDeviceName: live.bleDeviceName,
           startedAt: new Date(live.startedAt).getTime(),
           endsAt: new Date(live.endsAt).getTime(),
         })
+        setNetworkStatus(null)
         setTopic(live.topic || '')
         setDuration(live.durationMinutes || 30)
         setNow(Date.now())
-        setMode(BLE)
+        setMode(AUTO)
         loadRoster('Pending', '—')
       } catch { /* no live session — leave UI alone */ }
     })()
@@ -230,37 +223,45 @@ export default function FacultyAttendance() {
     }
   }
 
-  // ── BLE polling — replaces the old fake client simulator ──
+  // ── Automated attendence polling — replaces the old fake client simulator ──
   // Polls real backend every 2s for any student who has self-marked through their
   // portal's "Mark Attendance" button, and reflects it in the live faculty roster.
   // Faculty manual overrides are preserved (only Pending rows are updated from server).
   useEffect(() => {
-    if ((mode !== BLE && mode !== MANUAL) || !bleSession) return
+    if ((mode !== AUTO && mode !== MANUAL) || !activeSession) return
     pollRef.current = setInterval(async () => {
-      if (Date.now() >= bleSession.endsAt) return
+      if (Date.now() >= activeSession.endsAt) return
       try {
-        const res = await api.get(`/faculty/attendance/sessions/${bleSession.id}/marks`)
+        const res = await api.get(`/faculty/attendance/sessions/${activeSession.id}/marks`)
         const arr = Array.isArray(res.data) ? res.data : []
-        setRoster(prev => prev.map(r => {
-          const live = arr.find(m => m.enrollmentId === r.enrollmentId)
-          if (!live || !live.presence) return r
-          if (r.status !== 'Pending') return r
-          const status = live.presence === 'P' ? 'Present'
-                       : live.presence === 'A' ? 'Absent'
-                       : live.presence === 'L' ? 'Leave' : r.status
-          return { ...r, status, method: live.method || 'PIN', deviceUuid: live.deviceUuid, clientIp: live.clientIp, clientFingerprint: live.clientFingerprint }
-        }))
+        let newLatest = null
+        setRoster(prev => {
+          const next = prev.map(r => {
+            const live = arr.find(m => m.enrollmentId === r.enrollmentId)
+            if (!live || !live.presence) return r
+            if (r.status !== 'Pending') return r
+            newLatest = { rollNo: r.roll, name: r.name }
+            const status = live.presence === 'P' ? 'Present'
+                         : live.presence === 'A' ? 'Absent'
+                         : live.presence === 'L' ? 'Leave' : r.status
+            return { ...r, status, method: live.method || 'Automated', deviceUuid: live.deviceUuid, clientIp: live.clientIp, clientMac: live.clientMac, clientFingerprint: live.clientFingerprint }
+          })
+          return next
+        })
+        if (newLatest) {
+          setLatestMark(newLatest)
+        }
       } catch { /* keep last good */ }
     }, 2000)
     return () => clearInterval(pollRef.current)
-  }, [mode, bleSession])
+  }, [mode, activeSession])
 
   // Countdown ticker
   useEffect(() => {
-    if ((mode !== BLE && mode !== MANUAL) || !bleSession) return
+    if ((mode !== AUTO && mode !== MANUAL) || !activeSession) return
     tickRef.current = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(tickRef.current)
-  }, [mode, bleSession])
+  }, [mode, activeSession])
 
   const course = courses.find(c => String(c.id) === String(courseId))
 
@@ -278,9 +279,9 @@ export default function FacultyAttendance() {
     return roster.filter(r => r.roll.toLowerCase().includes(q) || r.name.toLowerCase().includes(q))
   }, [roster, search])
 
-  // Count device-UUIDs across the full roster (not the filtered subset) so a
-  // duplicate is still flagged even if the user search-filters one away.
-  const deviceCounts = useMemo(() => {
+  // Browser UUID and hotspot MAC are hard same-session locks. The backend
+  // rejects both for new marks.
+  const uuidCounts = useMemo(() => {
     const m = {}
     for (const r of roster) {
       if (r.deviceUuid) m[r.deviceUuid] = (m[r.deviceUuid] || 0) + 1
@@ -288,10 +289,15 @@ export default function FacultyAttendance() {
     return m
   }, [roster])
 
-  // Cross-browser fingerprint counts. A collision here = different localStorage
-  // UUIDs but identical screen+lang+tz signature → either same phone via
-  // different browsers (probable cheat) or two students with identical phones
-  // (legitimate). Surfaced as a yellow review flag, never auto-rejected.
+  // Fingerprint collisions are review flags only. They catch identical OS/screen
+  // signatures but students are still allowed to mark.
+  const macCounts = useMemo(() => {
+    const m = {}
+    for (const r of roster) {
+      if (r.clientMac) m[r.clientMac] = (m[r.clientMac] || 0) + 1
+    }
+    return m
+  }, [roster])
   const fingerprintCounts = useMemo(() => {
     const m = {}
     for (const r of roster) {
@@ -302,10 +308,17 @@ export default function FacultyAttendance() {
 
   // Same flags computed for the past-session edit roster so the Device column
   // there can highlight collisions exactly the same way as the live view.
-  const editDeviceCounts = useMemo(() => {
+  const editUuidCounts = useMemo(() => {
     const m = {}
     for (const r of editRoster) {
       if (r.deviceUuid) m[r.deviceUuid] = (m[r.deviceUuid] || 0) + 1
+    }
+    return m
+  }, [editRoster])
+  const editMacCounts = useMemo(() => {
+    const m = {}
+    for (const r of editRoster) {
+      if (r.clientMac) m[r.clientMac] = (m[r.clientMac] || 0) + 1
     }
     return m
   }, [editRoster])
@@ -319,7 +332,7 @@ export default function FacultyAttendance() {
 
   // ── Mode initiations ──
   const startEdit = async () => {
-    setMode(EDIT); setBleSession(null)
+    setMode(EDIT); setActiveSession(null)
     if (!courseId) return
     setViewLoading(true)
     try {
@@ -332,23 +345,24 @@ export default function FacultyAttendance() {
     } finally { setViewLoading(false) }
   }
 
-  const startBleMode = () => {
+  const startAutomatedMode = () => {
     if (!courseId) return
-    setMode(BLE)
-    setBleSession(null)
+    setMode(AUTO)
+    setActiveSession(null)
+    setLatestMark(null)
   }
 
   const startManualMode = () => {
     if (!courseId) return
     setMode(MANUAL)
-    setBleSession(null)
+    setActiveSession(null)
     setTopic('')
     // Default everyone to Present in Manual; faculty just unchecks absentees.
     loadRoster('Present', 'Manual')
   }
 
   // Manual mode is one-shot: open a session + commit marks in a single click.
-  // No live PIN window, no countdown — faculty just sets everyone's status
+  // No live self-mark window, no countdown — faculty just sets everyone's status
   // and hits Save. Topic is required so Sir's record always has a name.
   const saveManualAttendance = async () => {
     const cleanTopic = (topic || '').trim()
@@ -360,14 +374,11 @@ export default function FacultyAttendance() {
     if (!courseId) return
     setSaving(true)
     try {
-      // Open the session. Backend requires a bleDeviceName even though Manual
-      // doesn't actually use BLE pairing — pass a placeholder so validation
-      // passes; no student will ever see this name (Manual closes immediately).
       const open = await api.post('/faculty/attendance/sessions', {
         facultySectionId: parseInt(courseId, 10),
         topic: cleanTopic,
         durationMinutes: 5,  // tiny window; we close it immediately below
-        bleDeviceName: 'MANUAL',
+        mode: 'MANUAL',
       })
       const sessionId = open.data.id
       // Build marks: anything still Pending falls through to backend's Auto/Absent rule.
@@ -384,7 +395,7 @@ export default function FacultyAttendance() {
       const late    = finalRoster.filter(r => r.status === 'Late' || r.status === 'Leave').length
       setToast({ kind: 'ok', text: `Manual attendance saved · ${present} P / ${absent} A / ${late} L` })
       setMode(IDLE)
-      setBleSession(null)
+      setActiveSession(null)
       setTopic('')
     } catch (err) {
       setToast({ kind: 'err', text: 'Save failed: ' + (err.response?.data?.message || err.message) })
@@ -407,89 +418,53 @@ export default function FacultyAttendance() {
     }))
   }
 
-  const openBleWindow = async () => {
+  const openAutomatedWindow = async () => {
     if (!topic.trim()) {
       setToast({ kind: 'err', text: 'Topic is required before opening a session.' })
       clearToastSoon()
       return
     }
-    const cleanedName = (bleDeviceName || '').trim()
-    // Manual mode skips the BLE name + sanity-pair (it's a faculty-only flow).
-    if (mode === BLE) {
-      if (!cleanedName) {
-        setToast({ kind: 'err', text: 'BLE device name is required. Type the exact name your laptop or phone is broadcasting under.' })
-        clearToastSoon()
-        return
-      }
-      if (!bleSupported) {
-        setToast({ kind: 'err', text: 'Bluetooth is not available in this browser. Use Chrome / Edge over HTTPS or localhost.' })
-        clearToastSoon()
-        return
-      }
-      try {
-        // Sanity-pair so the faculty confirms their own broadcaster is reachable
-        // before students attempt to pair. Cancellation aborts the open flow.
-        await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [] })
-      } catch (err) {
-        setToast({ kind: 'err', text: 'Bluetooth pairing cancelled. Make sure your device is broadcasting + Bluetooth is on, then retry.' })
-        clearToastSoon()
-        return
-      }
-    }
-    // Capture classroom lat/long via the browser's Geolocation API. Stored
-    // on the session so student mark requests are rejected if they're > 100m
-    // away — defeats the "rename a phone at home" cheat.
-    let coords = null
-    try {
-      coords = await new Promise((resolve, reject) => {
-        if (!navigator.geolocation) return reject(new Error('Geolocation not supported.'))
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-          (err) => reject(err),
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        )
-      })
-    } catch (err) {
-      setToast({ kind: 'err', text: 'Location permission required. Allow location in your browser, then retry Open.' })
-      clearToastSoon()
-      return
-    }
+    setSaving(true)
+    let openedSessionId = null
     try {
       const res = await api.post('/faculty/attendance/sessions', {
         facultySectionId: parseInt(courseId, 10),
         topic,
         durationMinutes: duration,
-        bleDeviceName: cleanedName,
-        latitude: coords.latitude,
-        longitude: coords.longitude,
       })
       const s = res.data
-      setBleSession({
+      openedSessionId = s.id
+      const net = await api.post(`/faculty/attendance/sessions/${s.id}/network/start`)
+      setNetworkStatus(net.data || null)
+      setActiveSession({
         id: s.id,
-        sessionToken: s.sessionToken,
-        bleDeviceName: s.bleDeviceName,
         startedAt: new Date(s.startedAt).getTime(),
         endsAt: new Date(s.endsAt).getTime(),
       })
       setNow(new Date(s.startedAt).getTime())
-      // Manual mode wants every student pre-marked Present; BLE mode starts blank.
+      // Manual mode wants every student pre-marked Present; automated attendence starts blank.
       await loadRoster(mode === MANUAL ? 'Present' : 'Pending', mode === MANUAL ? 'Manual' : '—')
-      setToast({ kind: 'info', text: mode === MANUAL ? 'Manual session open — tap rows to set P / A / L.' : `BLE window open · students must pair with "${s.bleDeviceName}".` })
+      setToast({ kind: 'info', text: 'Automated Attendence is live · students join Mark-Attendence and open attendence.fast.' })
       clearToastSoon()
     } catch (err) {
-      setToast({ kind: 'err', text: 'Failed to open session: ' + (err.response?.data?.message || err.message) })
+      if (openedSessionId) {
+        await api.post(`/faculty/attendance/sessions/${openedSessionId}/close`, { marks: [] }).catch(() => {})
+      }
+      setToast({ kind: 'err', text: 'Failed to open Automated Attendence session: ' + (err.response?.data?.message || err.message) })
       clearToastSoon()
+    } finally {
+      setSaving(false)
     }
   }
 
   const startView = async () => {
-    setMode(VIEW); setBleSession(null)
+    setMode(VIEW); setActiveSession(null)
     if (!courseId) return
     setViewLoading(true)
     try {
       const res = await api.get(`/faculty/sections/${courseId}/attendance/sessions`)
       const arr = Array.isArray(res.data) ? res.data : []
-      // Show closed sessions only — open ones still belong to BLE/Manual flows.
+      // Show closed sessions only — open ones still belong to Automated/Manual flows.
       setViewSessions(arr.filter(s => s.status === 'CLOSED'))
     } catch (err) {
       setToast({ kind: 'err', text: 'Failed to load past sessions.' })
@@ -516,6 +491,7 @@ export default function FacultyAttendance() {
         method: r.method || '—',
         deviceUuid: r.deviceUuid,
         clientIp: r.clientIp,
+        clientMac: r.clientMac,
         clientFingerprint: r.clientFingerprint,
         dirty: false,
       })))
@@ -581,12 +557,14 @@ export default function FacultyAttendance() {
     }
   }
 
-  const cancelMode = () => {
-    if ((mode === BLE || mode === MANUAL) && bleSession) {
-      api.post(`/faculty/attendance/sessions/${bleSession.id}/close`, { marks: [] }).catch(() => {})
+  const cancelMode = async () => {
+    if ((mode === AUTO || mode === MANUAL) && activeSession) {
+      await api.post(`/faculty/attendance/sessions/${activeSession.id}/network/stop`, {}).catch(() => {})
+      await api.post(`/faculty/attendance/sessions/${activeSession.id}/close`, { marks: [] }).catch(() => {})
     }
     setMode(IDLE)
-    setBleSession(null)
+    setActiveSession(null)
+    setNetworkStatus(null)
     setTopic('')
     loadRoster()
   }
@@ -602,12 +580,13 @@ export default function FacultyAttendance() {
     }))
   }
 
-  const closeBleAndSave = async () => {
-    if (!bleSession) return
+  const closeAutomatedAndSave = async () => {
+    if (!activeSession) return
     setSaving(true)
     const finalRoster = roster.map(r => r.status === 'Pending' ? { ...r, status: 'Absent', method: 'Auto' } : r)
     try {
-      await api.post(`/faculty/attendance/sessions/${bleSession.id}/close`, {
+      await api.post(`/faculty/attendance/sessions/${activeSession.id}/network/stop`, {}).catch(() => {})
+      await api.post(`/faculty/attendance/sessions/${activeSession.id}/close`, {
         marks: finalRoster.map(r => ({
           enrollmentId: r.enrollmentId,
           presence: PRESENCE_CODE[r.status] || 'A',
@@ -619,7 +598,8 @@ export default function FacultyAttendance() {
       const leave   = finalRoster.filter(r => r.status === 'Leave').length
       setToast({ kind: 'ok', text: `Session closed & saved · ${present} present / ${absent} absent` })
       setMode(IDLE)
-      setBleSession(null)
+      setActiveSession(null)
+      setNetworkStatus(null)
       setTopic('')
     } catch (err) {
       setToast({ kind: 'err', text: 'Close failed: ' + (err.response?.data?.message || err.message) })
@@ -649,13 +629,13 @@ export default function FacultyAttendance() {
     }
   }
 
-  const remainingMs = bleSession ? Math.max(0, bleSession.endsAt - now) : 0
+  const remainingMs = activeSession ? Math.max(0, activeSession.endsAt - now) : 0
   const remainingMin = Math.floor(remainingMs / 60000)
   const remainingSec = Math.floor((remainingMs % 60000) / 1000)
-  const elapsedPct = bleSession ? Math.min(100, ((now - bleSession.startedAt) / (bleSession.endsAt - bleSession.startedAt)) * 100) : 0
+  const elapsedPct = activeSession ? Math.min(100, ((now - activeSession.startedAt) / (activeSession.endsAt - activeSession.startedAt)) * 100) : 0
 
   useEffect(() => {
-    if ((mode === BLE || mode === MANUAL) && bleSession && remainingMs <= 0) closeBleAndSave()
+    if ((mode === AUTO || mode === MANUAL) && activeSession && remainingMs <= 0) closeAutomatedAndSave()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now])
 
@@ -666,7 +646,7 @@ export default function FacultyAttendance() {
         kicker="Attendance"
         KickerIcon={ListChecks}
         title="ATTENDANCE"
-        subtitle="Pick a section, then choose a mode — view past records, edit a past session, open a BLE attendance window for student self-mark, or do manual attendance."
+        subtitle="Pick a section, then choose a mode — view past records, edit a past session, open an Automated Attendence Wi-Fi window, or do manual attendance."
       />
 
       <div className="chunky-card overflow-hidden">
@@ -726,7 +706,7 @@ export default function FacultyAttendance() {
                 />
               </div>
             )}
-            <ModeBadge mode={mode} bleSupported={bleSupported} />
+            <ModeBadge mode={mode} />
           </div>
         </div>
 
@@ -734,30 +714,26 @@ export default function FacultyAttendance() {
           <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-2.5">
             <ModeButton onClick={startView}        Icon={Eye}       title="View"   sub="Past closed sessions, read-only." />
             <ModeButton onClick={startEdit}        Icon={Hand}      title="Edit"   sub="Pick a past session, update P/A/L." accent />
-            <ModeButton onClick={startBleMode}     Icon={Bluetooth} title="BLE"    sub="Students pair via Bluetooth to self-mark." />
+            <ModeButton onClick={startAutomatedMode}     Icon={Wifi} title="Automated" sub="Start Wi-Fi attendance." />
             <ModeButton onClick={startManualMode}  Icon={ListChecks} title="Manual" sub="Tap each student to mark P/A/L." />
           </div>
         )}
 
-        {mode === BLE && !bleSession && (
+        {mode === AUTO && !activeSession && (
           <div className="p-5 grid grid-cols-1 md:grid-cols-12 gap-4">
-            <Field className="md:col-span-6" label="Lecture Topic">
+            <Field className="md:col-span-8" label="Lecture Topic">
               <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. Iterative & Incremental Models"
                 className="w-full bg-bone border-2 border-ink rounded-md px-3 py-2 font-mono text-sm text-ink focus:outline-none" />
             </Field>
-            <Field className="md:col-span-3" label={`Duration · ${duration >= 60 ? `${(duration / 60).toFixed(duration % 60 ? 1 : 0)} hr` : `${duration} min`}`}>
+            <Field className="md:col-span-4" label={`Duration · ${duration >= 60 ? `${(duration / 60).toFixed(duration % 60 ? 1 : 0)} hr` : `${duration} min`}`}>
               <input type="range" min="5" max="180" step="5" value={duration} onChange={(e) => setDuration(parseInt(e.target.value))} className="w-full accent-ink" />
             </Field>
-            <Field className="md:col-span-3" label="BLE device name">
-              <input value={bleDeviceName} onChange={(e) => setBleDeviceName(e.target.value)} placeholder="e.g. FLEX-NUKED-CLASSROOM"
-                className="w-full bg-bone border-2 border-ink rounded-md px-3 py-2 font-mono text-sm text-ink focus:outline-none" />
-            </Field>
             <div className="md:col-span-12 text-[11px] font-bold text-cocoa">
-              Students must pair with this BLE device + be within 25m of where you click Open. After Open, you'll be asked to sanity-pair so we can confirm your broadcaster is reachable.
+              Click the open button to start <span className="font-mono text-ink">Mark-Attendence</span> Wifi, students open <span className="font-mono text-ink">attendence.fast</span> in their browser, Enter their roll no to mark attendence.
             </div>
             <div className="md:col-span-12 flex justify-end gap-2">
               <ActionButton tone="bone" Icon={X} onClick={cancelMode}>Back</ActionButton>
-              <ActionButton tone="cocoa" Icon={Play} onClick={openBleWindow}>Open</ActionButton>
+              <ActionButton tone="cocoa" Icon={Play} onClick={openAutomatedWindow} disabled={saving}>{saving ? 'Starting...' : 'Open'}</ActionButton>
             </div>
           </div>
         )}
@@ -780,7 +756,7 @@ export default function FacultyAttendance() {
           </div>
         )}
 
-        {mode === BLE && bleSession && (
+        {mode === AUTO && activeSession && (
           <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-12 gap-4">
             <div className="md:col-span-7 bg-cream border-2 border-ink rounded-md px-3 py-2.5">
               <div className="text-[10px] font-extrabold text-coffee uppercase tracking-widest">&gt; Topic</div>
@@ -791,41 +767,38 @@ export default function FacultyAttendance() {
               <div className="font-extrabold text-lg text-ink tabular-nums">{remainingMin}:{remainingSec.toString().padStart(2, '0')}</div>
             </div>
             <div className="md:col-span-2 flex gap-2 items-end">
-              <ActionButton tone="bad" Icon={Square} onClick={closeBleAndSave} disabled={saving}>{saving ? 'Saving…' : 'Close & Save'}</ActionButton>
+              <ActionButton tone="bad" Icon={Square} onClick={closeAutomatedAndSave} disabled={saving}>{saving ? 'Saving…' : 'Close & Save'}</ActionButton>
             </div>
             <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="bg-cream border-2 border-ink rounded-md p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-extrabold text-coffee uppercase tracking-widest">&gt; Session progress</span>
-                  <span className="tag bg-coffee text-bone tabular-nums">{Math.round(elapsedPct)}%</span>
-                </div>
-                <div className="bg-bone border-2 border-ink rounded h-4 overflow-hidden relative">
-                  <div className="h-full bg-burn transition-all duration-1000" style={{ width: `${elapsedPct}%` }} />
-                </div>
-                <div className="mt-1.5 text-[10px] font-extrabold text-cocoa uppercase tracking-wider">
-                  Token <span className="font-mono text-ink">{bleSession.sessionToken}</span>
-                </div>
+                <div className="text-[10px] font-extrabold text-coffee uppercase tracking-widest mb-3">&gt; Latest Marked Student</div>
+                {latestMark ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-moss text-cream rounded-full flex items-center justify-center shrink-0">
+                      <CheckCircle2 size={16} strokeWidth={3} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-display text-sm text-ink truncate">{latestMark.rollNo}</div>
+                      <div className="text-[10px] font-bold text-cocoa truncate">{latestMark.name}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs font-bold text-cocoa opacity-60">Waiting for marks...</div>
+                )}
               </div>
-              {mode === BLE ? (
-                <div className="bg-coffee text-bone border-2 border-ink rounded-md p-3 flex items-center gap-3">
-                  <div className="w-10 h-10 bg-bone border-2 border-ink rounded-md flex items-center justify-center shrink-0">
-                    <Bluetooth size={18} className="text-coffee" strokeWidth={3} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-extrabold uppercase tracking-widest opacity-80">&gt; Students must pair with</div>
-                    <div className="font-mono font-extrabold text-base md:text-lg mt-0.5 break-all">{bleSession.bleDeviceName || bleDeviceName}</div>
-                    <div className="text-[10px] mt-1 opacity-80 font-bold uppercase tracking-wider">Within 25m + paired via Bluetooth = mark accepted</div>
-                  </div>
+              <div className="bg-coffee text-bone border-2 border-ink rounded-md p-3 flex items-center gap-3">
+                <div className="w-10 h-10 bg-bone border-2 border-ink rounded-md flex items-center justify-center shrink-0">
+                  <Wifi size={18} className="text-coffee" strokeWidth={3} />
                 </div>
-              ) : (
-                <div className="bg-coffee text-bone border-2 border-ink rounded-md p-3 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-extrabold uppercase tracking-widest opacity-80">&gt; Manual mode</div>
-                    <div className="font-extrabold text-base mt-1">Tap each student row below to cycle Pending → Present → Absent → Leave.</div>
-                    <div className="text-[10px] mt-1 opacity-80 font-bold uppercase tracking-wider">Close & Save when done — unmarked students become Absent automatically.</div>
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-extrabold uppercase tracking-widest opacity-80">&gt; Student access</div>
+                  <div className="font-mono font-extrabold text-base md:text-lg mt-0.5 break-all">SSID {networkStatus?.ssid || 'Mark-Attendence'} · attendence.fast</div>
                 </div>
-              )}
+                <button onClick={() => window.open(`/faculty/attendance/projector/${activeSession.id}`, '_blank')}
+                  className="bg-bone text-ink border-2 border-ink rounded px-2.5 py-1.5 font-display text-[10px] uppercase tracking-wider shadow-pixel-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all inline-flex items-center gap-1">
+                  <ExternalLink size={11} strokeWidth={3} /> Projector
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -856,7 +829,7 @@ export default function FacultyAttendance() {
         </div>
       )}
 
-      {(mode === BLE || mode === MANUAL) && (
+      {(mode === AUTO || mode === MANUAL) && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <StatCard Icon={Users} label="Total" value={stats.total} tone="bg-cocoa text-bone" />
           <StatCard Icon={CheckCircle2} label="Present" value={stats.present} tone="bg-moss text-cream" />
@@ -866,7 +839,7 @@ export default function FacultyAttendance() {
         </div>
       )}
 
-      {(mode === BLE || mode === MANUAL) && (
+      {(mode === AUTO || mode === MANUAL) && (
         <SectionCard
           title={`Roster — ${course?.courseCode || ''} · ${course?.section || ''}`}
           right={
@@ -889,9 +862,11 @@ export default function FacultyAttendance() {
             </thead>
             <tbody>
               {filtered.map((r, i) => {
-                const dupDevice = r.deviceUuid && deviceCounts[r.deviceUuid] > 1
-                const dupFingerprint = !dupDevice && r.clientFingerprint && fingerprintCounts[r.clientFingerprint] > 1
-                const rowBg = dupDevice ? 'bg-bad/10' : dupFingerprint ? 'bg-mustard/15' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
+                const dupUuid = r.deviceUuid && uuidCounts[r.deviceUuid] > 1
+                const dupMac = r.clientMac && macCounts[r.clientMac] > 1
+                const dupFingerprint = r.clientFingerprint && fingerprintCounts[r.clientFingerprint] > 1
+                const hardFlag = dupUuid || dupMac
+                const rowBg = hardFlag ? 'bg-bad/10' : dupFingerprint ? 'bg-mustard/15' : i % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
                 return (
                 <tr key={r.enrollmentId || r.roll} className={`border-b border-dashed border-cocoa/30 ${rowBg}`}>
                   <td className="px-4 py-2.5 text-cocoa font-bold text-xs">{i + 1}</td>
@@ -912,11 +887,12 @@ export default function FacultyAttendance() {
                     </td>
                   )}
                   <td className="px-4 py-2.5 text-center">
-                    <span className={`tag ${r.method === 'PIN' || r.method === 'Bluetooth' ? 'bg-coffee text-bone' : r.method === 'Manual' ? 'bg-mustard text-ink' : r.method === 'Auto' ? 'bg-cocoa text-bone' : 'bg-bone text-cocoa'}`}>{r.method}</span>
+                    <MethodTag method={r.method} />
                   </td>
                   <td className="px-4 py-2.5 text-center">
-                    <DeviceCell r={r} dupDevice={dupDevice} dupFingerprint={dupFingerprint}
-                      deviceCount={deviceCounts[r.deviceUuid]}
+                    <DeviceCell r={r} dupUuid={dupUuid} dupMac={dupMac} dupFingerprint={dupFingerprint}
+                      uuidCount={uuidCounts[r.deviceUuid]}
+                      macCount={macCounts[r.clientMac]}
                       fingerprintCount={fingerprintCounts[r.clientFingerprint]} />
                   </td>
                 </tr>
@@ -1007,9 +983,11 @@ export default function FacultyAttendance() {
                                 </thead>
                                 <tbody>
                                   {editRoster.map((r, j) => {
-                                    const dupDeviceE = r.deviceUuid && editDeviceCounts[r.deviceUuid] > 1
-                                    const dupFingerprintE = !dupDeviceE && r.clientFingerprint && editFingerprintCounts[r.clientFingerprint] > 1
-                                    const rowBgE = dupDeviceE ? 'bg-bad/10' : dupFingerprintE ? 'bg-mustard/15' : j % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
+                                    const dupUuidE = r.deviceUuid && editUuidCounts[r.deviceUuid] > 1
+                                    const dupMacE = r.clientMac && editMacCounts[r.clientMac] > 1
+                                    const dupFingerprintE = r.clientFingerprint && editFingerprintCounts[r.clientFingerprint] > 1
+                                    const hardFlagE = dupUuidE || dupMacE
+                                    const rowBgE = hardFlagE ? 'bg-bad/10' : dupFingerprintE ? 'bg-mustard/15' : j % 2 === 0 ? 'bg-cream' : 'bg-bone/50'
                                     return (
                                     <tr key={r.enrollmentId} className={`border-b border-dashed border-cocoa/30 ${rowBgE} ${r.dirty ? 'ring-1 ring-burn/40' : ''}`}>
                                       <td className="px-4 py-2 text-left text-cocoa font-bold text-xs">{j + 1}</td>
@@ -1021,11 +999,12 @@ export default function FacultyAttendance() {
                                           : <span className={`tag ${STATUS_TONE[r.status]}`}>{r.status === 'Leave' ? 'Late' : r.status}</span>}
                                       </td>
                                       <td className="px-4 py-2 text-center">
-                                        <span className={`tag ${r.method === 'PIN' || r.method === 'Bluetooth' ? 'bg-coffee text-bone' : r.method === 'Manual' ? 'bg-mustard text-ink' : r.method === 'Auto' ? 'bg-cocoa text-bone' : 'bg-bone text-cocoa'}`}>{r.method}</span>
+                                        <MethodTag method={r.method} />
                                       </td>
                                       <td className="px-4 py-2 text-center">
-                                        <DeviceCell r={r} dupDevice={dupDeviceE} dupFingerprint={dupFingerprintE}
-                                          deviceCount={editDeviceCounts[r.deviceUuid]}
+                                        <DeviceCell r={r} dupUuid={dupUuidE} dupMac={dupMacE} dupFingerprint={dupFingerprintE}
+                                          uuidCount={editUuidCounts[r.deviceUuid]}
+                                          macCount={editMacCounts[r.clientMac]}
                                           fingerprintCount={editFingerprintCounts[r.clientFingerprint]} />
                                       </td>
                                       {mode === EDIT && (
@@ -1073,7 +1052,7 @@ function ModeButton({ onClick, Icon, title, sub, accent }) {
         <div className="w-7 h-7 bg-coffee border-2 border-ink shadow-pixel-sm rounded-md flex items-center justify-center shrink-0">
           <Icon size={13} className="text-bone" strokeWidth={2.8} />
         </div>
-        <span className="font-display text-xs text-ink uppercase tracking-wider truncate">{title}</span>
+        <span className="font-display text-[11px] text-ink uppercase tracking-wide whitespace-normal break-words leading-tight">{title}</span>
       </div>
       <div className="text-[10px] text-cocoa font-bold leading-snug line-clamp-2">{sub}</div>
     </button>
@@ -1096,21 +1075,30 @@ function ExportItem({ Icon, title, sub, onClick, last }) {
   )
 }
 
-function ModeBadge({ mode, bleSupported }) {
+function ModeBadge({ mode }) {
   const map = {
     [IDLE]: { label: 'IDLE', tone: 'bg-bone text-ink' },
     [VIEW]: { label: 'VIEW', tone: 'bg-coffee text-bone' },
     [EDIT]: { label: 'EDIT', tone: 'bg-mustard text-ink' },
-    [BLE]:  { label: 'BLE',  tone: 'bg-burn text-bone animate-blink' },
+    [AUTO]:  { label: 'AUTOMATED',  tone: 'bg-burn text-bone animate-blink' },
     manual: { label: 'MANUAL', tone: 'bg-coffee text-bone' },
   }
   const info = map[mode] || map[IDLE]
   return (
-    <div className="flex items-center gap-2">
-      <span className={`tag ${info.tone}`}>{info.label}</span>
-      {bleSupported === false && <span className="tag bg-mustard text-ink" title="Web Bluetooth not supported in this browser">BLE OFF</span>}
-    </div>
+    <span className={`tag ${info.tone}`}>{info.label}</span>
   )
+}
+
+function MethodTag({ method }) {
+  const label = method || '—'
+  const tone = label === 'Automated'
+    ? 'bg-coffee text-bone'
+    : label === 'Manual'
+      ? 'bg-mustard text-ink'
+      : label === 'Auto'
+        ? 'bg-cocoa text-bone'
+        : 'bg-bone text-cocoa'
+  return <span className={`tag ${tone}`}>{label}</span>
 }
 
 function Field({ label, children, className = '' }) {
@@ -1133,21 +1121,23 @@ function Th({ children, center }) {
  * fingerprint collisions (same phone, different browsers OR identical
  * phone models) it's mustard yellow — a review flag, not a verdict.
  */
-function DeviceCell({ r, dupDevice, dupFingerprint, deviceCount, fingerprintCount }) {
-  if (!r.deviceUuid && !r.clientFingerprint) {
+function DeviceCell({ r, dupUuid, dupMac, dupFingerprint, uuidCount, macCount, fingerprintCount }) {
+  if (!r.clientMac && !r.deviceUuid && !r.clientFingerprint) {
     return <span className="text-cocoa/40 text-xs">—</span>
   }
-  if (dupDevice || dupFingerprint) {
-    const isHard = dupDevice
+  if (dupUuid || dupMac || dupFingerprint) {
+    const isHard = dupUuid || dupMac
     const tone = isHard ? 'bg-bad text-bone' : 'bg-mustard text-ink'
     const tailColor = isHard ? 'bg-bad' : 'bg-mustard'
-    const tip = isHard
-      ? `Same browser device used by ${deviceCount} students — same-browser log-out cheat`
-      : `Same phone signature as ${fingerprintCount} students — could be same phone via different browsers, or identical phone models. Verify with the student.`
+    const tip = dupUuid
+      ? `Same browser UUID used by ${uuidCount} students — blocked for new marks.`
+      : dupMac
+        ? `Same hotspot MAC as ${macCount} students — blocked for new marks.`
+        : `Same OS/screen fingerprint as ${fingerprintCount} students — allowed, verify if suspicious.`
     return (
       <div className="relative inline-block" title={tip}>
         <span className={`relative ${tone} border-2 border-ink rounded-md px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider whitespace-nowrap shadow-pixel-sm ${isHard ? 'animate-blink' : ''}`}>
-          {isHard ? '⚠ same device' : '⚑ same device'}
+          {dupUuid ? 'same browser' : dupMac ? 'same phone' : 'review device'}
         </span>
         {/* Chat-bubble tail: a small rotated square positioned at the bottom-left, with the bubble color + ink border (only the visible two sides). */}
         <span className={`absolute left-3 -bottom-[5px] w-2.5 h-2.5 ${tailColor} border-r-2 border-b-2 border-ink rotate-45`} aria-hidden="true" />
@@ -1156,7 +1146,7 @@ function DeviceCell({ r, dupDevice, dupFingerprint, deviceCount, fingerprintCoun
   }
   return (
     <span className="text-cocoa/40 text-[10px] font-mono"
-      title={`Device ${r.deviceUuid || '?'}${r.clientIp ? ` · IP ${r.clientIp}` : ''}${r.clientFingerprint ? ` · ${r.clientFingerprint}` : ''}`}>
+      title={`MAC ${r.clientMac || '?'}${r.deviceUuid ? ` · UUID ${r.deviceUuid}` : ''}${r.clientIp ? ` · IP ${r.clientIp}` : ''}${r.clientFingerprint ? ` · ${r.clientFingerprint}` : ''}`}>
       ✓
     </span>
   )

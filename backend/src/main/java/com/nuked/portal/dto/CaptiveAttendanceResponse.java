@@ -8,7 +8,7 @@ import java.time.LocalDate;
 
 @Data
 @AllArgsConstructor
-public class OpenSessionForStudentDTO {
+public class CaptiveAttendanceResponse {
     private Long sessionId;
     private Long enrollmentId;
     private String courseCode;
@@ -18,7 +18,5 @@ public class OpenSessionForStudentDTO {
     private LocalDate lectureDate;
     private Instant startedAt;
     private Instant endsAt;
-    private String sessionToken;
     private boolean alreadyMarked;
-    private String bleDeviceName;
 }

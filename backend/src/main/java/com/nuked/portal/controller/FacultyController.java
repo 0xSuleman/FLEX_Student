@@ -8,6 +8,7 @@ import com.nuked.portal.dto.RosterEntryDTO;
 import com.nuked.portal.model.Faculty;
 import com.nuked.portal.service.AttendanceSessionService;
 import com.nuked.portal.service.FacultyService;
+import com.nuked.portal.service.NetworkCommanderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +25,7 @@ public class FacultyController {
 
     private final FacultyService facultyService;
     private final AttendanceSessionService sessionService;
+    private final NetworkCommanderService networkCommanderService;
 
     @GetMapping("/me")
     public ResponseEntity<Map<String, Object>> me(Authentication auth) {
@@ -72,7 +74,34 @@ public class FacultyController {
     public ResponseEntity<AttendanceSessionDTO> closeSession(Authentication auth,
                                                              @PathVariable Long id,
                                                              @RequestBody(required = false) CloseSessionRequest req) {
+        try {
+            networkCommanderService.stop(id);
+        } catch (RuntimeException ignored) {
+            // Attendance close must still save even if the local hotspot daemon
+            // is not running or has already auto-stopped.
+        }
         return ResponseEntity.ok(sessionService.close(auth.getName(), id, req));
+    }
+
+    @PostMapping("/attendance/sessions/{id}/network/start")
+    public ResponseEntity<Map<String, Object>> startAttendanceNetwork(Authentication auth,
+                                                                      @PathVariable Long id) {
+        AttendanceSessionDTO session = sessionService.get(auth.getName(), id);
+        return ResponseEntity.ok(networkCommanderService.start(session));
+    }
+
+    @PostMapping("/attendance/sessions/{id}/network/stop")
+    public ResponseEntity<Map<String, Object>> stopAttendanceNetwork(Authentication auth,
+                                                                     @PathVariable Long id) {
+        sessionService.get(auth.getName(), id);
+        return ResponseEntity.ok(networkCommanderService.stop(id));
+    }
+
+    @GetMapping("/attendance/sessions/{id}/network/status")
+    public ResponseEntity<Map<String, Object>> attendanceNetworkStatus(Authentication auth,
+                                                                       @PathVariable Long id) {
+        sessionService.get(auth.getName(), id);
+        return ResponseEntity.ok(networkCommanderService.status());
     }
 
     @DeleteMapping("/attendance/sessions/{id}")

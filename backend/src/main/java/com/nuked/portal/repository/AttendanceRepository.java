@@ -20,4 +20,7 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
      */
     Optional<Attendance> findFirstBySessionIdAndDeviceUuidAndEnrollmentIdNot(
             Long sessionId, String deviceUuid, Long enrollmentId);
+
+    Optional<Attendance> findFirstBySessionIdAndClientMacAndEnrollmentIdNot(
+            Long sessionId, String clientMac, Long enrollmentId);
 }
