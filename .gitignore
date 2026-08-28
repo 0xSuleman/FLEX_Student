@@ -22,3 +22,5 @@ Thumbs.db
 
 # Secrets — never commit real credentials
 backend/src/main/resources/application-local.properties
+.env
+.env.local

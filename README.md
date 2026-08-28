@@ -65,15 +65,19 @@ CREATE DATABASE flex_student_db;
 
 ### Step 2 — Backend Configuration
 
-Open `backend/src/main/resources/application.properties` and set your MySQL password:
+Set the backend environment variables before starting Spring Boot. Use `.env.example` as the value reference; Spring Boot reads the exported environment, not the file itself.
 
-```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/flex_student_db
-spring.datasource.username=root
-spring.datasource.password=your_mysql_password
+```powershell
+$env:DB_PASSWORD = "your-local-mysql-password"
+$env:JWT_SECRET = "replace-with-at-least-32-random-characters"
 ```
 
-Or set the environment variable `DB_PASSWORD` before running.
+```bash
+export DB_PASSWORD="your-local-mysql-password"
+export JWT_SECRET="replace-with-at-least-32-random-characters"
+```
+
+`JWT_SECRET` has no committed fallback by design. Optional variables for the database URL, username, CORS origins, and port are documented in `.env.example`.
 
 ### Step 3 — Start the Backend
 
@@ -102,6 +106,7 @@ npm run dev
 ```
 
 The frontend starts on **http://localhost:5173**.
+Set `VITE_API_URL` in `frontend/.env` when the backend is not running at `http://localhost:8080`; see `frontend/.env.example`.
 
 ---
 
